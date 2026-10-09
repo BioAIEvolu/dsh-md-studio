@@ -7,6 +7,7 @@
 渲染引擎随插件内置，**完全离线可用** · 无需改动你的文档 · 停用即恢复官方渲染器
 
 [![CI](https://github.com/BioAIEvolu/dsh-md-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/BioAIEvolu/dsh-md-studio/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/dsh-md-studio)](https://www.npmjs.com/package/dsh-md-studio)
 [![GitHub release](https://img.shields.io/github/v/release/BioAIEvolu/dsh-md-studio)](https://github.com/BioAIEvolu/dsh-md-studio/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.2.0--rc.2-blue)](https://github.com/deepseek-ai/deepseek-harness)
