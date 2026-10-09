@@ -27,7 +27,7 @@ const registration = await page.evaluate(() => {
   mod.apply(ctx);
   window.__root = window.__testCreateRoot(document.querySelector('#preview'));
   window.__render = text => window.__root.render(window.__testReact.createElement(window.__slot.component, {
-    content: {kind:'text', text, pages:[], eof:true}, resourceAddress:'file:demo', useResource: () => ({value:{absolutePath:'D:/Project/DSH/dsh-md-studio-demo.md'}})
+    content: {kind:'text', text, pages:[], eof:true}, resourceAddress:'file:demo', useResource: () => ({value:{absolutePath:'D:/demo.md'}})
   }));
   return { id: window.__registration.id, options: window.__slot.options, status: window.__dshMdStudio };
 });
