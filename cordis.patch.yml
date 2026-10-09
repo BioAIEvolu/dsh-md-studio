@@ -1,0 +1,4 @@
+# Single bundle registration. The package main resolves to lib/index.js.
+- insert:
+    - id: md-studio
+      name: dsh-md-studio

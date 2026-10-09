@@ -1,0 +1,51 @@
+{
+  "name": "dsh-md-studio",
+  "version": "1.1.1",
+  "description": "Markdown Studio：在 DSH 原生右侧文件预览中渲染 Mermaid 图表、KaTeX 公式、GFM 表格、任务列表、脚注及代码高亮。渲染引擎随包内置，完全离线可用。 / Native DSH right-sidebar Markdown preview with Mermaid diagrams, KaTeX math, GFM tables and syntax highlighting — fully offline.",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "markdown",
+    "mermaid",
+    "katex",
+    "syntax-highlighting",
+    "preview"
+  ],
+  "homepage": "https://github.com/BioAIEvolu/dsh-md-studio#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BioAIEvolu/dsh-md-studio.git"
+  },
+  "bugs": "https://github.com/BioAIEvolu/dsh-md-studio/issues",
+  "license": "MIT",
+  "author": "BioAIEvolu",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {".": "./lib/index.js", "./client": "./lib/client.js", "./package.json": "./package.json"},
+  "files": ["lib", "docs/images", "docs/demo.md", "cordis.patch.yml", "README.md", "README.en.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md"],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node test/browser.mjs",
+    "screenshots": "node test/screenshots.mjs"
+  },
+  "dsh": {
+    "bundle": {"patch": "./cordis.patch.yml"},
+    "client": {"platform": "web", "inject": ["@deepseek-ai/dsh-client-ui-sidebar-documentpreview"], "external": ["react"]}
+  },
+  "engines": {"node": ">=22.19.0", "dsh": ">=0.2.0-rc.2 <0.3.0-0"},
+  "peerDependencies": {"react": "^18.2.0 || ^19"},
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "mermaid": "11.17.0",
+    "markdown-it": "15.0.2",
+    "markdown-it-footnote": "4.0.0",
+    "markdown-it-task-lists": "2.1.1",
+    "dompurify": "3.4.16",
+    "highlight.js": "11.12.0",
+    "katex": "0.19.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "playwright-core": "1.64.0"
+  }
+}

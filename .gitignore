@@ -1,0 +1,15 @@
+# dependencies & build
+node_modules/
+artifacts/
+test/react-runtime.js
+
+# test output (curated screenshots live in docs/images)
+test/artifacts/
+
+# logs & OS
+*.log
+.DS_Store
+Thumbs.db
+
+# local env
+.env
