@@ -92,12 +92,57 @@ await page.waitForSelector('.mds-document[data-state="ready"]', { timeout: 60000
 assert.equal(await page.locator('.mds-diagram[data-state="ok"] svg').count(), 4, 'actual demo must render all four diagrams');
 assert.ok((await page.locator('.mds-diagram').first().locator('svg').textContent()).includes('打开 Markdown 文件'));
 await page.screenshot({ path: resolve(root, 'test/artifacts/user-demo-dark.png'), fullPage: true });
+
+// --- v1.2: conversation-side (chat) Mermaid rendering ---
+// Simulate the official chat DOM: plain pre>code without a language class,
+// placed OUTSIDE the document-preview root, like chat messages are.
+await page.evaluate(() => {
+  window.__chat = document.createElement('div');
+  window.__chat.id = 'chat-simulator';
+  document.body.appendChild(window.__chat);
+});
+await page.evaluate(() => {
+  const wrap = document.createElement('div');
+  wrap.innerHTML = '<pre><code>flowchart LR\n    X[聊天图表] --> Y[渲染成功]\n</code></pre>';
+  window.__chat.appendChild(wrap);
+});
+await page.waitForSelector('#chat-simulator .mds-diagram[data-state="ok"] svg', { timeout: 60000 });
+assert.ok((await page.locator('#chat-simulator svg').textContent()).replace(/\s+/g, '').includes('聊天图表'), 'chat diagram must render with its labels');
+// No double-rendering: the document-preview root must keep exactly its own 4 cards.
+assert.equal(await page.locator('[data-mds-root] .mds-diagram').count(), 4, 'document preview must not be re-carded by the chat watcher');
+// Streaming: text settles after rapid updates -> exactly one card with the final content.
+await page.evaluate(() => {
+  const wrap = document.createElement('div');
+  wrap.innerHTML = '<pre><code>flowchart TD</code></pre>';
+  window.__chat.appendChild(wrap);
+  const code = wrap.querySelector('code');
+  code.textContent = 'flowchart TD\n A[第一] --> B';
+  setTimeout(() => { code.textContent = 'flowchart TD\n A[第一] --> B[第二] --> C[流式完成]'; }, 120);
+  setTimeout(() => { code.textContent = 'flowchart TD\n A[第一] --> B[第二] --> C[流式完成]\n C --> D[稳定输出]'; }, 240);
+});
+await page.waitForFunction(() => {
+  const cards = document.querySelectorAll('#chat-simulator .mds-diagram');
+  return cards.length === 2 && [...cards].every(c => c.dataset.state === 'ok');
+}, { timeout: 60000 });
+assert.ok((await page.locator('#chat-simulator svg').last().textContent()).replace(/\s+/g, '').includes('稳定输出'), 'streamed chat diagram must show final content');
+assert.equal(await page.locator('#chat-simulator .mds-diagram').count(), 2, 'streaming must produce exactly one card per block');
+// Theme flip: chat cards re-render and stay ok (light -> back to dark).
+await page.evaluate(() => document.body.removeAttribute('data-ds-dark-theme'));
+await page.waitForFunction(() => window.__dshMdStudio.diagrams >= 16);
+assert.equal(await page.locator('#chat-simulator .mds-diagram[data-state="ok"] svg').count(), 2);
+await page.evaluate(() => document.body.setAttribute('data-ds-dark-theme', ''));
+await page.waitForFunction(() => window.__dshMdStudio.diagrams >= 18);
+// Unmount the chat simulator: cards must be garbage collected.
+const chatCardsBefore = await page.locator('.mds-diagram').count();
+await page.evaluate(() => window.__chat.remove());
+await page.waitForFunction(() => !document.getElementById('chat-simulator'));
+assert.ok((await page.locator('.mds-diagram').count()) < chatCardsBefore, 'chat cards must be disposed with their container');
 const status = await page.evaluate(() => ({...window.__dshMdStudio}));
 await page.evaluate(() => { window.__root.unmount(); window.__effects.reverse().forEach(d=>d?.()); });
 assert.equal(await page.locator('style[data-plugin="dsh-md-studio"]').count(), 0);
 assert.equal(errors.length, 0, JSON.stringify(errors));
 assert.equal(network.length, 0, 'Renderer should make zero network requests: '+JSON.stringify(network));
-const result = {passed:true,browser:await browser.version(),nativeSlot:registration.options.key,svgDiagrams:5,externalRequests:network.length,pageErrors:errors.length,checks:['GFM table','task lists','footnotes','inline and block KaTeX','syntax highlight','four Mermaid types','mermaid syntax auto-repair','source toggle','fullscreen','SVG download','dark theme rerender','invalid diagram isolation','HTML sanitization','file switching','plugin disposal'],status};
+const result = {passed:true,browser:await browser.version(),nativeSlot:registration.options.key,svgDiagrams:5,externalRequests:network.length,pageErrors:errors.length,checks:['GFM table','task lists','footnotes','inline and block KaTeX','syntax highlight','four Mermaid types','mermaid syntax auto-repair','source toggle','fullscreen','SVG download','dark theme rerender','invalid diagram isolation','HTML sanitization','file switching','plugin disposal','chat mermaid rendering','chat streaming stability','chat no-double-render','chat theme rebuild','chat disposal'],status};
 await writeFile(resolve(root,'test/artifacts/result.json'),JSON.stringify(result,null,2));
 console.log(JSON.stringify(result,null,2));
 await browser.close();

@@ -11,7 +11,7 @@ const MAX_DOCUMENT = 2_000_000;
 const MAX_DIAGRAM = 50_000;
 let sequence = 0;
 let queue = Promise.resolve();
-export const diagnostics = { version: '1.1.1', active: false, documents: 0, diagrams: 0, repaired: 0, errors: 0 };
+export const diagnostics = { version: '1.2.0', active: false, documents: 0, diagrams: 0, repaired: 0, errors: 0 };
 
 function mathPlugin(md) {
   md.inline.ruler.before('escape', 'studio_math', (state, silent) => {
@@ -206,4 +206,125 @@ export function mountMarkdown(root, text, { documentPath, dark = false } = {}) {
   diagnostics.documents++;
   const done = Promise.all(jobs).then(() => { if (!signal.aborted) root.dataset.state = root.querySelector('.mds-diagram[data-state="error"]') ? 'partial' : 'ready'; });
   return { done, dispose: () => controller.abort() };
+}
+
+// -----------------------------------------------------------------------
+// 对话内 Mermaid 渲染：MutationObserver 监听聊天流，把官方 CodeBlock 里的
+// mermaid 围栏就地转成图表卡片。与右侧文档预览共用 diagramCard / repair /
+// 队列，因此自动修复、主题适配行为一致。排除区（自身渲染产物、dsh-mermaid
+// 的产物）避免同一块被渲染两次。
+// -----------------------------------------------------------------------
+
+const MERMAID_TYPES = new Set([
+  'flowchart', 'graph', 'sequenceDiagram', 'classDiagram', 'stateDiagram',
+  'stateDiagram-v2', 'erDiagram', 'gantt', 'pie', 'journey', 'timeline',
+  'mindmap', 'gitGraph', 'quadrantChart', 'requirementDiagram', 'c4Context',
+  'c4Container', 'c4Component', 'c4Dynamic', 'c4Deployment', 'block',
+  'packet', 'architecture-beta', 'sankey-beta', 'xychart-beta', 'zenuml',
+]);
+const MERMAID_LANG_RE = /^language-(?:mermaid|mermaidjs|mmd)$/i;
+function diagramTypeOf(source) {
+  const m = /^\s*([A-Za-z][\w-]*)/.exec(source || '');
+  return m ? m[1] : '';
+}
+function isMermaidCodeBlock(code) {
+  const pre = code?.closest?.('pre');
+  if (!pre) return false;
+  const classes = Array.from(code.classList || []);
+  if (classes.some((n) => MERMAID_LANG_RE.test(n))) return true;
+  if (classes.some((n) => /^language-/i.test(n))) return false;
+  return MERMAID_TYPES.has(diagramTypeOf((code.textContent || '').trim()));
+}
+
+const chatEntries = new Map(); // code element -> { wrapper?, pre?, timer?, text? }
+const CHAT_STABLE_MS = 400;
+let chatSignal = null;
+
+function isInsideExcluded(el) {
+  return !!el.closest?.('.mds-diagram, [data-mds-root], .dsh-mmd, .dsh-mds-mmd');
+}
+function disposeChat(code) {
+  const entry = chatEntries.get(code);
+  if (!entry) return;
+  if (entry.timer) clearTimeout(entry.timer);
+  // Put the original pre back before removing the wrapper, so React-owned
+  // DOM stays where the framework placed it.
+  if (entry.wrapper && entry.wrapper.isConnected) {
+    const pre = entry.wrapper.querySelector(':scope > pre');
+    if (pre) entry.wrapper.before(pre);
+    entry.wrapper.remove();
+  }
+  chatEntries.delete(code);
+}
+export function watchMermaid(target, { getDark = () => false } = {}) {
+  if (typeof document === 'undefined' || !target) return { dispose() {}, rebuildAll() {} };
+  if (!chatSignal || chatSignal.signal.aborted) chatSignal = new AbortController();
+  const schedule = (code) => {
+    const entry = chatEntries.get(code) || {};
+    if (entry.timer) clearTimeout(entry.timer);
+    entry.text = (code.textContent || '').trim();
+    entry.timer = setTimeout(() => {
+      entry.timer = null;
+      if (!code.isConnected || isInsideExcluded(code) || !isMermaidCodeBlock(code)) { disposeChat(code); return; }
+      if (entry.wrapper) return;
+      const pre = code.closest('pre');
+      if (!pre) return;
+      entry.wrapper = diagramCard(pre, getDark(), chatSignal.signal);
+    }, CHAT_STABLE_MS);
+    chatEntries.set(code, entry);
+  };
+  const observer = new MutationObserver((mutations) => {
+    const seen = new Set();
+    for (const m of mutations) {
+      if (m.type === 'childList') {
+        for (const n of m.addedNodes) {
+          if (n.nodeType !== Node.ELEMENT_NODE) continue;
+          if (n.matches?.('pre')) { const c = n.querySelector(':scope > code'); if (c) seen.add(c); }
+          else if (n.matches?.('code')) seen.add(n);
+          else if (n.querySelectorAll) n.querySelectorAll('pre > code').forEach((c) => seen.add(c));
+        }
+        for (const n of m.removedNodes) {
+          if (n.nodeType !== Node.ELEMENT_NODE) continue;
+          n.querySelectorAll?.('.mds-diagram').forEach((card) => {
+            const pre = card.querySelector(':scope > pre');
+            if (pre) { const c = pre.querySelector(':scope > code'); if (c) chatEntries.delete(c); }
+          });
+        }
+      } else if (m.type === 'characterData') {
+        const t = m.target.parentElement;
+        const code = t && (t.matches?.('code') ? t : t.closest?.('code'));
+        if (code) seen.add(code);
+      }
+    }
+    // GC entries whose card left the DOM (message unmounted / list virtualization)
+    for (const [code, entry] of chatEntries) {
+      if (entry.wrapper && !entry.wrapper.isConnected) chatEntries.delete(code);
+    }
+    for (const code of seen) {
+      if (!code.isConnected) continue;
+      if (isInsideExcluded(code)) continue; // already rendered (by us or dsh-mermaid)
+      const entry = chatEntries.get(code);
+      if (entry && entry.wrapper) {
+        if ((code.textContent || '').trim() === entry.text) continue;
+        disposeChat(code); // stream rewrote the diagram: rebuild from scratch
+      }
+      if (isMermaidCodeBlock(code)) schedule(code);
+    }
+  });
+  observer.observe(target, { childList: true, subtree: true, characterData: true });
+  const rebuildAll = () => {
+    for (const code of [...chatEntries.keys()]) {
+      if (!code.isConnected) { disposeChat(code); continue; }
+      disposeChat(code);
+      if (isMermaidCodeBlock(code)) schedule(code);
+    }
+  };
+  return {
+    dispose() {
+      observer.disconnect();
+      for (const code of [...chatEntries.keys()]) disposeChat(code);
+      chatSignal = null;
+    },
+    rebuildAll,
+  };
 }

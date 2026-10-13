@@ -32,9 +32,10 @@ DeepSeek Harness 的右侧文件预览很好用，但 **Mermaid 代码块只会�
 
 ## ✨ 特性
 
+- **📈 对话内 + 文档预览双渲染**：聊天消息里的 Mermaid 块与右侧打开的 Markdown 文档，用同一套管线就地渲染成 SVG 图
 - **📈 Mermaid 图表**：流程图、时序图、甘特图、饼图等 Mermaid 11 全系图型；每张图带 **图形/源码切换 · 全屏（缩放/拖拽）· 下载 SVG** 工具栏；深浅主题自动重绘
 - **🩹 语法自动修复**：真实文档里最常见的 `W2[Codex / Claude Code (ACP)]` 这类"标签含英文括号"语法错误，**自动修复后照常渲染**，并在徽章标注"已自动修复"——不用改你的文档
-- **📐 KaTeX 数学公式**：行内 `$...$` 与块级 `$$...$$`
+- **📐 KaTeX 数学公式**：行内 `$...$` 与块级 `$$...$$`（文档预览）
 - **📝 完整 GFM**：表格、任务列表、脚注、删除线、标题锚点跳转
 - **🎨 代码高亮**：highlight.js 常用语言集
 - **🖼️ 本地图片**：相对路径按文档目录解析，经 DSH 原生鉴权接口读取
@@ -138,7 +139,7 @@ pnpm pack                     # 打包 dsh-md-studio-x.y.z.tgz
 
 ## 🗺️ Roadmap
 
-- [ ] 对话内 Mermaid 渲染（与 [dsh-mermaid](https://github.com/MrmoLabs/dsh-mermaid) 互补）
+- [x] 对话内 Mermaid 渲染（v1.2 已实现；与 [dsh-mermaid](https://github.com/MrmoLabs/dsh-mermaid) 插件共存安全，互不双渲染）
 - [ ] 图表导出 PNG
 - [ ] 目录（TOC）侧栏
 - [ ] 设置页（字号、图表方向）

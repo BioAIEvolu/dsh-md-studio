@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { mountMarkdown, diagnostics } from './renderer.js';
+import { mountMarkdown, diagnostics, watchMermaid } from './renderer.js';
 import css from './style.css';
 import katexCss from 'katex/dist/katex.min.css';
 import highlightCss from 'highlight.js/styles/github-dark.css';
@@ -28,7 +28,7 @@ export function MarkdownBody({ content, resourceAddress, useResource }) {
     return () => { view.dispose(); root.current?.replaceChildren(); };
   }, [content.kind, content.text, content.eof, absolutePath, dark, source]);
   if (content.kind !== 'text') return React.createElement('p', null, '正在读取文档…');
-  return React.createElement('section', { className: 'mds-native', 'data-md-studio': '1.1.1' },
+  return React.createElement('section', { className: 'mds-native', 'data-md-studio': '1.2.0' },
     React.createElement('div', { className: 'mds-document-tools' },
       React.createElement('span', null, 'Markdown Studio'),
       React.createElement('button', { type: 'button', onClick: () => setSource(!source), 'aria-pressed': source }, source ? '阅读文档' : '查看源码')),
@@ -51,6 +51,16 @@ export function apply(ctx) {
       else delete window.__dshMdStudio;
     };
   }, 'Markdown Studio: local styles and lifetime');
+  // v1.2: render Mermaid blocks inside the conversation stream. The watcher
+  // skips regions already rendered by us (document preview) or by dsh-mermaid,
+  // and re-renders everything on theme flips.
+  ctx.effect(() => {
+    if (typeof document === 'undefined' || !document.body) return;
+    const watcher = watchMermaid(document.body, { getDark: darkMode });
+    const themeObserver = new MutationObserver(() => watcher.rebuildAll());
+    themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme'] });
+    return () => { themeObserver.disconnect(); watcher.dispose(); };
+  }, 'Markdown Studio: chat mermaid renderer');
   // This is DSH's native document body, not a second side panel or a turnTail override.
   ctx.slots.inject('sidebar.right.tab.document', () => ctx.slots.register({
     name: 'sidebar.right.tab.document', key: MARKDOWN_KEY, priority: -100,

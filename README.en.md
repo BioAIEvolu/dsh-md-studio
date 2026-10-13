@@ -2,7 +2,7 @@
 
 # 📄 Markdown Studio for DeepSeek Harness
 
-**Mermaid diagrams, math formulas and syntax highlighting rendered right inside DSH's native right-sidebar file preview.**
+**Mermaid diagrams, math formulas and syntax highlighting rendered right inside DSH's native right-sidebar file preview — and in chat messages.**
 
 The rendering engine ships with the plugin — **fully offline** · no document changes needed · disable to restore the stock renderer
 
@@ -31,7 +31,7 @@ DeepSeek Harness's right-sidebar preview is great — except ` ```mermaid ` bloc
 
 ## ✨ Features
 
-- **📈 Mermaid diagrams** — flowcharts, sequence, gantt, pie and the full Mermaid 11 family; per-diagram toolbar with **diagram/source toggle · fullscreen (zoom & pan) · SVG download**; automatic re-render on theme change
+- **📈 Mermaid diagrams, chat + documents** — the same pipeline renders ` ```mermaid ` blocks in chat messages and in opened documents: flowcharts, sequence, gantt, pie and the full Mermaid 11 family; per-diagram toolbar with **diagram/source toggle · fullscreen (zoom & pan) · SVG download**; automatic re-render on theme change
 - **🩹 Syntax auto-repair** — the most common real-world breaker, ASCII parentheses inside node labels (`W2[Codex / Claude Code (ACP)]`), is repaired and rendered with an "auto-repaired" badge. No need to edit your documents
 - **📐 KaTeX math** — inline `$...$` and display `$$...$$`
 - **📝 Full GFM** — tables, task lists, footnotes, heading anchors
