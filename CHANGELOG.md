@@ -2,6 +2,19 @@
 
 本项目所有显著变更都记录在此文件中。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循语义化版本。
 
+## [Unreleased]
+
+### 性能
+
+- **右侧预览去重复渲染**：`content.eof` 不再是渲染依赖（分页读完不再额外全量重建一遍，也不再让全部 Mermaid 图重排一次）；文本更新经 `requestAnimationFrame` 合并，自动刷新/连续追加不再逐条全量重建。
+- **内容级有界缓存**：整篇 sanitized HTML、代码块 highlight、KaTeX 公式、Mermaid SVG（按源码 + 主题）均有上限缓存；翻页、EOF、重复打开不再重跑整条管线。真机基准：10 图文档 4 页追加的主线程任务时间 806ms → 393ms，EOF 翻转 273ms → 0.5ms，连续 3 次文本更新 786ms → 52ms。
+- **Mermaid 布局让出主线程**：每个图布局之间 `requestIdleCallback` 让出，多图页面不再连续独占主线程。
+- 回归测试：`content.eof` 翻转不得触发文档重建。
+
+### 说明
+
+- 首发渲染（打开一个很大的 `.md`）仍然是全量解析；真正的增量渲染（利用 `content.pages` 偏移）、Mermaid 视口懒渲染、聊天侧 MutationObserver 收窄属于后续工作。
+
 ## [1.2.0] - 2026-10-13
 
 ### 新增

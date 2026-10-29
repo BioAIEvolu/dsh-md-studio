@@ -24,9 +24,23 @@ export function MarkdownBody({ content, resourceAddress, useResource }) {
   }, []);
   useEffect(() => {
     if (!root.current || source || content.kind !== 'text') return;
-    const view = mountMarkdown(root.current, content.text, { documentPath: absolutePath, dark });
-    return () => { view.dispose(); root.current?.replaceChildren(); };
-  }, [content.kind, content.text, content.eof, absolutePath, dark, source]);
+    // P0 perf: the render only reads content.text, so content.eof must not be a
+    // dependency — flipping eof at the end of a paginated read used to force one
+    // more complete document render (and a full Mermaid re-render). Scheduling
+    // through requestAnimationFrame also coalesces bursts of text updates (page
+    // appends, auto-refresh reloads) into a single render per frame instead of
+    // one full rebuild per store notification.
+    root.current.dataset.state = 'rendering';
+    let view = null;
+    const frame = requestAnimationFrame(() => {
+      if (!root.current || source) return;
+      view = mountMarkdown(root.current, content.text, { documentPath: absolutePath, dark });
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      view?.dispose();
+    };
+  }, [content.kind, content.text, absolutePath, dark, source]);
   if (content.kind !== 'text') return React.createElement('p', null, '正在读取文档…');
   return React.createElement('section', { className: 'mds-native', 'data-md-studio': '1.3.0' },
     React.createElement('div', { className: 'mds-document-tools' },
