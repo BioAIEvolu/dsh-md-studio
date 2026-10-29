@@ -28,7 +28,7 @@ export function MarkdownBody({ content, resourceAddress, useResource }) {
     return () => { view.dispose(); root.current?.replaceChildren(); };
   }, [content.kind, content.text, content.eof, absolutePath, dark, source]);
   if (content.kind !== 'text') return React.createElement('p', null, '正在读取文档…');
-  return React.createElement('section', { className: 'mds-native', 'data-md-studio': '1.2.0' },
+  return React.createElement('section', { className: 'mds-native', 'data-md-studio': '1.3.0' },
     React.createElement('div', { className: 'mds-document-tools' },
       React.createElement('span', null, 'Markdown Studio'),
       React.createElement('button', { type: 'button', onClick: () => setSource(!source), 'aria-pressed': source }, source ? '阅读文档' : '查看源码')),

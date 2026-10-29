@@ -29,7 +29,7 @@ await build({
   banner: { js: 'window.__ModuleLoader__.load({id:"dsh-md-studio",factory:(require)=>{var module={exports:{}};var exports=module.exports;' },
   footer: { js: ';return module.exports;}});' },
 });
-await writeFile(join(root, 'lib/index.js'), 'export const name="dsh-md-studio";\nexport const inject=[];\nexport function apply() {}\n');
+await writeFile(join(root, 'lib/index.js'), await readFile(resolve(root, 'src/host.js')));
 // Test the exact shipped bundle. The browser test supplies only DSH\'s React external.
 await build({ absWorkingDir: root, stdin: { contents: "import React from 'react'; import {createRoot} from 'react-dom/client'; window.__testReact=React; window.__testCreateRoot=createRoot;", resolveDir: root }, outfile: 'test/react-runtime.js', bundle: true, format: 'iife', platform: 'browser', define: { 'process.env.NODE_ENV': '"production"' } });
 const libraries = ['mermaid','markdown-it','markdown-it-footnote','markdown-it-task-lists','dompurify','highlight.js','katex'];

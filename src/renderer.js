@@ -11,7 +11,7 @@ const MAX_DOCUMENT = 2_000_000;
 const MAX_DIAGRAM = 50_000;
 let sequence = 0;
 let queue = Promise.resolve();
-export const diagnostics = { version: '1.2.0', active: false, documents: 0, diagrams: 0, repaired: 0, errors: 0 };
+export const diagnostics = { version: '1.3.0', active: false, documents: 0, diagrams: 0, repaired: 0, widgets: 0, errors: 0 };
 
 function mathPlugin(md) {
   md.inline.ruler.before('escape', 'studio_math', (state, silent) => {
@@ -57,10 +57,21 @@ const md = new MarkdownIt({ html: true, linkify: true, typographer: false, highl
 }}).use(footnote).use(taskLists, { enabled: false }).use(mathPlugin);
 const fence = md.renderer.rules.fence;
 md.renderer.rules.fence = (tokens, idx, options, env, self) => {
-  const lang = tokens[idx].info.trim().split(/\s+/)[0].toLowerCase();
+  const info = tokens[idx].info.trim();
+  const lang = info.split(/\s+/)[0].toLowerCase();
   if (['mermaid', 'mmd', 'mermaidjs'].includes(lang)) return `<pre class="mds-diagram-source"><code class="language-mermaid">${escape(tokens[idx].content)}</code></pre>`;
+  if (['mds-diagram', 'mds-widget', 'mds-svg'].includes(lang)) return widgetHtml(tokens[idx].content, info.slice(lang.length).trim());
   return fence(tokens, idx, options, env, self);
 };
+
+/** Fence-time placeholder: escaped SVG text survives the document sanitize pass;
+ *  enhanceContent() later swaps it for the sanitized, themed widget card. */
+export function widgetHtml(svgSource, title) {
+  const source = String(svgSource || '');
+  if (!/<svg[\s>]/i.test(source)) return `<pre class="mds-diagram-source"><code class="language-mermaid">${escape(source)}</code></pre>`;
+  const autoTitle = (source.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '').replace(/[<>&]/g, '').trim().slice(0, 80);
+  return `<div class="mds-widget" data-mds-widget="1"><div class="mds-widget-title">${escape(title || autoTitle || '图表')}</div><pre class="mds-widget-src">${escape(source)}</pre></div>`;
+}
 
 // Same authenticated native media route used by DSH's MarkdownBody. No arbitrary static-file server.
 export function localImageUrl(destination, documentPath, base = document.baseURI) {
@@ -129,6 +140,68 @@ export function repairMermaid(source) {
   out = out.replace(/\|([^|\n]+)\|/g, (m, inner) => /[()]/.test(inner) ? '|' + JSON.stringify(inner) + '|' : m);
   return out;
 }
+// -----------------------------------------------------------------------
+// 彩色图表主题：亮/暗两套基于 mermaid 'base' + themeVariables 的现代配色，
+// 蓝紫主色 + 多彩辅色（pie / gantt / gitGraph 各自成套），替代默认灰紫。
+// -----------------------------------------------------------------------
+
+const VIVID = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4', '#EC4899', '#84CC16', '#6366F1', '#F97316', '#14B8A6', '#A855F7'];
+const THEME_LIGHT = {
+  background: 'transparent',
+  fontFamily: 'system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif',
+  fontSize: '14px',
+  textColor: '#1F2937', titleColor: '#111827', classText: '#1F2937',
+  primaryColor: '#3B82F6', primaryTextColor: '#FFFFFF', primaryBorderColor: '#1D4ED8',
+  secondaryColor: '#8B5CF6', secondaryTextColor: '#FFFFFF', secondaryBorderColor: '#7C3AED',
+  tertiaryColor: '#F59E0B', tertiaryTextColor: '#FFFFFF', tertiaryBorderColor: '#D97706',
+  mainBkg: '#3B82F6', nodeBorder: '#1D4ED8', nodeTextColor: '#FFFFFF',
+  lineColor: '#94A3B8',
+  clusterBkg: 'rgba(59,130,246,.07)', clusterBorder: 'rgba(59,130,246,.35)',
+  edgeLabelBackground: '#F3F4F6',
+  labelBoxBkgColor: '#EFF6FF', labelBoxBorderColor: '#3B82F6', labelTextColor: '#1D4ED8',
+  noteBkgColor: '#FFFBEB', noteTextColor: '#92400E', noteBorderColor: '#FCD34D',
+  actorBkg: '#3B82F6', actorBorder: '#1D4ED8', actorTextColor: '#FFFFFF', actorLineColor: '#94A3B8',
+  signalColor: '#374151', signalTextColor: '#374151', loopTextColor: '#374151',
+  activationBkgColor: '#DBEAFE', activationBorderColor: '#3B82F6',
+  taskBkgColor: '#3B82F6', taskBorderColor: '#1D4ED8', taskTextColor: '#FFFFFF', taskTextDarkColor: '#FFFFFF', taskTextLightColor: '#FFFFFF', taskTextOutsideColor: '#374151',
+  activeTaskBkgColor: '#8B5CF6', activeTaskBorderColor: '#7C3AED',
+  doneTaskBkgColor: '#D1FAE5', doneTaskBorderColor: '#10B981', doneTaskTextColor: '#065F46',
+  critBkgColor: '#FEE2E2', critBorderColor: '#EF4444', critTextColor: '#991B1B',
+  sectionBkgColor: 'rgba(59,130,246,.06)', sectionBkgColor2: 'rgba(59,130,246,.12)', altSectionBkgColor: '#FFFFFF',
+  todayLineColor: '#EF4444',
+  pie1: VIVID[0], pie2: VIVID[1], pie3: VIVID[2], pie4: VIVID[3], pie5: VIVID[4], pie6: VIVID[5], pie7: VIVID[6], pie8: VIVID[7], pie9: VIVID[8], pie10: VIVID[9], pie11: VIVID[10], pie12: VIVID[11],
+  pieTitleTextColor: '#111827', pieSectionTextColor: '#FFFFFF', pieLegendTextColor: '#374151', pieStrokeColor: '#FFFFFF', pieOuterStrokeColor: '#E5E7EB',
+  git0: VIVID[0], git1: VIVID[1], git2: VIVID[2], git3: VIVID[3], git4: VIVID[4], git5: VIVID[5], git6: VIVID[6], git7: VIVID[7],
+  cScale0: VIVID[0], cScale1: VIVID[1], cScale2: VIVID[2], cScale3: VIVID[3], cScale4: VIVID[4], cScale5: VIVID[5], cScale6: VIVID[6], cScale7: VIVID[7], cScale8: VIVID[8], cScale9: VIVID[9], cScale10: VIVID[10], cScale11: VIVID[11],
+};
+const THEME_DARK = {
+  background: 'transparent',
+  fontFamily: 'system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif',
+  fontSize: '14px',
+  textColor: '#E5E7EB', titleColor: '#F9FAFB', classText: '#E5E7EB',
+  primaryColor: '#2563EB', primaryTextColor: '#FFFFFF', primaryBorderColor: '#60A5FA',
+  secondaryColor: '#7C3AED', secondaryTextColor: '#FFFFFF', secondaryBorderColor: '#A78BFA',
+  tertiaryColor: '#D97706', tertiaryTextColor: '#FFFFFF', tertiaryBorderColor: '#FBBF24',
+  mainBkg: '#2563EB', nodeBorder: '#60A5FA', nodeTextColor: '#FFFFFF',
+  lineColor: '#64748B',
+  clusterBkg: 'rgba(148,163,184,.08)', clusterBorder: 'rgba(148,163,184,.30)',
+  edgeLabelBackground: '#111827',
+  labelBoxBkgColor: '#1E3A8A', labelBoxBorderColor: '#60A5FA', labelTextColor: '#DBEAFE',
+  noteBkgColor: '#78350F', noteTextColor: '#FDE68A', noteBorderColor: '#B45309',
+  actorBkg: '#2563EB', actorBorder: '#60A5FA', actorTextColor: '#FFFFFF', actorLineColor: '#475569',
+  signalColor: '#CBD5E1', signalTextColor: '#CBD5E1', loopTextColor: '#CBD5E1',
+  activationBkgColor: '#1E40AF', activationBorderColor: '#60A5FA',
+  taskBkgColor: '#2563EB', taskBorderColor: '#60A5FA', taskTextColor: '#FFFFFF', taskTextDarkColor: '#FFFFFF', taskTextLightColor: '#FFFFFF', taskTextOutsideColor: '#CBD5E1',
+  activeTaskBkgColor: '#7C3AED', activeTaskBorderColor: '#A78BFA',
+  doneTaskBkgColor: '#064E3B', doneTaskBorderColor: '#34D399', doneTaskTextColor: '#A7F3D0',
+  critBkgColor: '#7F1D1D', critBorderColor: '#F87171', critTextColor: '#FECACA',
+  sectionBkgColor: 'rgba(37,99,235,.10)', sectionBkgColor2: 'rgba(37,99,235,.04)', altSectionBkgColor: 'transparent',
+  todayLineColor: '#F87171',
+  pie1: VIVID[0], pie2: VIVID[1], pie3: VIVID[2], pie4: VIVID[3], pie5: VIVID[4], pie6: VIVID[5], pie7: VIVID[6], pie8: VIVID[7], pie9: VIVID[8], pie10: VIVID[9], pie11: VIVID[10], pie12: VIVID[11],
+  pieTitleTextColor: '#F9FAFB', pieSectionTextColor: '#FFFFFF', pieLegendTextColor: '#CBD5E1', pieStrokeColor: '#111827', pieOuterStrokeColor: '#374151',
+  git0: VIVID[0], git1: VIVID[1], git2: VIVID[2], git3: VIVID[3], git4: VIVID[4], git5: VIVID[5], git6: VIVID[6], git7: VIVID[7],
+  cScale0: VIVID[0], cScale1: VIVID[1], cScale2: VIVID[2], cScale3: VIVID[3], cScale4: VIVID[4], cScale5: VIVID[5], cScale6: VIVID[6], cScale7: VIVID[7], cScale8: VIVID[8], cScale9: VIVID[9], cScale10: VIVID[10], cScale11: VIVID[11],
+};
 function diagramCard(pre, dark, signal) {
   const source = pre.textContent;
   const card = document.createElement('section'); card.className = 'mds-diagram'; card.dataset.state = 'loading';
@@ -148,7 +221,7 @@ function diagramCard(pre, dark, signal) {
     if (signal.aborted || !card.isConnected) return;
     const draw = async src => {
       if (src.length > MAX_DIAGRAM || src.split('\n').length > 2000) throw new Error('此图表过大，请缩减为 5 万字符、2000 行以内。');
-      mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', suppressErrorRendering: true, theme: dark ? 'dark' : 'default', htmlLabels: false, flowchart: { htmlLabels: false }, maxTextSize: MAX_DIAGRAM, maxEdges: 2000 });
+      mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', suppressErrorRendering: true, theme: 'base', themeVariables: dark ? THEME_DARK : THEME_LIGHT, htmlLabels: false, flowchart: { htmlLabels: false, curve: 'basis', nodeSpacing: 45, rankSpacing: 55 }, maxTextSize: MAX_DIAGRAM, maxEdges: 2000 });
       const result = await mermaid.render(`mdstudio-${++sequence}`, src);
       const svg = DOMPurify.sanitize(result.svg, { USE_PROFILES: { svg: true, svgFilters: true, html: true }, FORBID_TAGS: ['script', 'iframe', 'object', 'embed'] });
       pane.innerHTML = svg;
@@ -203,6 +276,20 @@ export function mountMarkdown(root, text, { documentPath, dark = false } = {}) {
     else { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
   });
   const jobs = [...root.querySelectorAll('pre.mds-diagram-source')].map(pre => diagramCard(pre, dark, signal));
+  // Hydrate mds-diagram widget placeholders: swap escaped SVG source for the
+  // sanitized, themed widget body. SVG <style> survives via the svg profile.
+  root.querySelectorAll('pre.mds-widget-src').forEach(pre => {
+    const holder = pre.closest('.mds-widget');
+    if (!holder) return;
+    const title = holder.querySelector('.mds-widget-title')?.textContent || '';
+    const clean = DOMPurify.sanitize(pre.textContent, { USE_PROFILES: { svg: true, svgFilters: true }, FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'foreignObject'] });
+    if (!/<svg[\s>]/i.test(clean)) return;
+    const body = document.createElement('div'); body.className = 'mds-widget-body'; body.innerHTML = clean;
+    const svg = body.querySelector('svg');
+    if (svg) { svg.removeAttribute('width'); svg.removeAttribute('height'); svg.style.width = '100%'; svg.style.height = 'auto'; }
+    pre.replaceWith(body);
+    if (title) diagnostics.widgets++;
+  });
   diagnostics.documents++;
   const done = Promise.all(jobs).then(() => { if (!signal.aborted) root.dataset.state = root.querySelector('.mds-diagram[data-state="error"]') ? 'partial' : 'ready'; });
   return { done, dispose: () => controller.abort() };
@@ -241,7 +328,7 @@ const CHAT_STABLE_MS = 400;
 let chatSignal = null;
 
 function isInsideExcluded(el) {
-  return !!el.closest?.('.mds-diagram, [data-mds-root], .dsh-mmd, .dsh-mds-mmd');
+  return !!el.closest?.('.mds-diagram, [data-mds-root], .dsh-mmd, .dsh-mds-mmd, .mds-widget');
 }
 function disposeChat(code) {
   const entry = chatEntries.get(code);
@@ -256,6 +343,23 @@ function disposeChat(code) {
   }
   chatEntries.delete(code);
 }
+/** Build a themed widget card for a model-authored SVG (chat side). */
+function widgetCardFromCode(code, dark) {
+  const pre = code.closest('pre');
+  if (!pre) return null;
+  const source = (code.textContent || '').trim();
+  const clean = DOMPurify.sanitize(source, { USE_PROFILES: { svg: true, svgFilters: true }, FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'foreignObject'] });
+  if (!/<svg[\s>]/i.test(clean)) return null;
+  const title = (clean.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '').replace(/[<>&]/g, '').trim().slice(0, 80);
+  const card = document.createElement('section'); card.className = 'mds-widget'; card.dataset.state = 'ok';
+  const bar = document.createElement('div'); bar.className = 'mds-widget-title'; bar.textContent = title || '图表';
+  const body = document.createElement('div'); body.className = 'mds-widget-body'; body.innerHTML = clean;
+  const svg = body.querySelector('svg');
+  if (svg) { svg.removeAttribute('width'); svg.removeAttribute('height'); svg.style.width = '100%'; svg.style.height = 'auto'; }
+  pre.before(card); pre.hidden = true; card.append(bar, body, pre);
+  diagnostics.widgets++;
+  return card;
+}
 export function watchMermaid(target, { getDark = () => false } = {}) {
   if (typeof document === 'undefined' || !target) return { dispose() {}, rebuildAll() {} };
   if (!chatSignal || chatSignal.signal.aborted) chatSignal = new AbortController();
@@ -265,10 +369,13 @@ export function watchMermaid(target, { getDark = () => false } = {}) {
     entry.text = (code.textContent || '').trim();
     entry.timer = setTimeout(() => {
       entry.timer = null;
-      if (!code.isConnected || isInsideExcluded(code) || !isMermaidCodeBlock(code)) { disposeChat(code); return; }
+      if (!code.isConnected || isInsideExcluded(code)) { disposeChat(code); return; }
       if (entry.wrapper) return;
       const pre = code.closest('pre');
       if (!pre) return;
+      const source = (code.textContent || '').trim();
+      if (source.startsWith('<svg')) { entry.wrapper = widgetCardFromCode(code, getDark()); if (entry.wrapper) return; }
+      if (!isMermaidCodeBlock(code)) { disposeChat(code); return; }
       entry.wrapper = diagramCard(pre, getDark(), chatSignal.signal);
     }, CHAT_STABLE_MS);
     chatEntries.set(code, entry);
@@ -314,6 +421,9 @@ export function watchMermaid(target, { getDark = () => false } = {}) {
   observer.observe(target, { childList: true, subtree: true, characterData: true });
   const rebuildAll = () => {
     for (const code of [...chatEntries.keys()]) {
+      const entry = chatEntries.get(code);
+      // Widget cards use explicit colors that work on both themes — skip.
+      if (entry?.wrapper?.classList?.contains('mds-widget')) continue;
       if (!code.isConnected) { disposeChat(code); continue; }
       disposeChat(code);
       if (isMermaidCodeBlock(code)) schedule(code);
