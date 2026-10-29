@@ -26,8 +26,8 @@ const registration = await page.evaluate(() => {
   }};
   mod.apply(ctx);
   window.__root = window.__testCreateRoot(document.querySelector('#preview'));
-  window.__render = text => window.__root.render(window.__testReact.createElement(window.__slot.component, {
-    content: {kind:'text', text, pages:[], eof:true}, resourceAddress:'file:demo', useResource: () => ({value:{absolutePath:'D:/demo.md'}})
+  window.__render = (text, eof = true) => window.__root.render(window.__testReact.createElement(window.__slot.component, {
+    content: {kind:'text', text, pages:[], eof}, resourceAddress:'file:demo', useResource: () => ({value:{absolutePath:'D:/demo.md'}})
   }));
   return { id: window.__registration.id, options: window.__slot.options, status: window.__dshMdStudio };
 });
@@ -36,6 +36,15 @@ assert.equal(registration.options.key, '@deepseek-ai/dsh-client-ui-sidebar-docum
 const sample = `# 原生右侧 Markdown 预览验证\n\n| 项目 | 状态 |\n|---|---|\n| 离线图表 | 是 |\n\n- [x] 已完成\n- [ ] 待完成\n\n脚注示例[^one]\n\n[^one]: 说明正文\n\n质能关系 $E=mc^2$。\n\n$$\ne^{i\\pi}+1=0\n$$\n\n\`\`\`js\nconst answer = 42;\n\`\`\`\n\n\`\`\`mermaid\nflowchart LR\n A[打开文件] --> B[右侧预览] --> C[本地渲染]\n\`\`\`\n\n\`\`\`mermaid\nsequenceDiagram\n 用户->>DSH: 打开 Markdown\n DSH-->>用户: 显示图表\n\`\`\`\n\n\`\`\`mermaid\ngantt\n title 验证计划\n dateFormat YYYY-MM-DD\n section 验证\n 渲染 :done, a1, 2026-10-08, 1d\n\`\`\`\n\n\`\`\`mermaid\npie title 能力\n "文档" : 60\n "图表" : 40\n\`\`\`\n\n\`\`\`mermaid\nflowchart LR\n W2[Codex / Claude Code / KimiCode / OpenCode (ACP)] --> W1[DSH Native]\n\`\`\`\n`;
 await page.evaluate(text => window.__render(text), sample);
 await page.waitForSelector('.mds-document[data-state="ready"]', {timeout:60000});
+// Perf regression: content.eof is not a render input (the render only reads
+// content.text), so flipping it on identical text must not rebuild the document
+// or re-lay out its Mermaid diagrams.
+await page.evaluate(text => window.__render(text, false), sample);
+await page.waitForTimeout(300);
+const rendersBeforeEofFlip = await page.evaluate(() => window.__dshMdStudio.documents);
+await page.evaluate(text => window.__render(text, true), sample);
+await page.waitForTimeout(500);
+assert.equal(await page.evaluate(() => window.__dshMdStudio.documents), rendersBeforeEofFlip, 'eof flip must not rebuild the document');
 assert.equal(await page.locator('.mds-diagram[data-state="ok"] svg').count(), 5);
 assert.ok((await page.locator('.mds-diagram').first().locator('svg').textContent()).includes('打开文件'), 'flowchart SVG must retain visible node labels');
 assert.equal(await page.locator('.mds-badge', { hasText: '已自动修复' }).count(), 1, 'parenthesised node label must be auto-repaired');
