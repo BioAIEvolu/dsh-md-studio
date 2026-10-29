@@ -11,6 +11,31 @@ const MAX_DOCUMENT = 2_000_000;
 const MAX_DIAGRAM = 50_000;
 let sequence = 0;
 let queue = Promise.resolve();
+// P0 perf: content-keyed caches. A document re-render previously re-ran the
+// whole markdown pipeline (highlight.js + KaTeX) and every Mermaid layout even
+// when the text was unchanged (theme flip) or only a page was appended. These
+// caches make repeated work O(lookup); sizes are bounded to keep memory flat.
+const HTML_CACHE = new Map(); // text -> sanitized html
+const HL_CACHE = new Map(); // language\0code -> highlighted html
+const TEX_CACHE = new Map(); // display\0formula -> katex html
+const SVG_CACHE = new Map(); // theme\0source -> sanitized svg
+const HTML_CACHE_MAX = 2;
+const HL_CACHE_MAX = 300;
+const TEX_CACHE_MAX = 300;
+const SVG_CACHE_MAX = 80;
+function remember(map, key, value, max) {
+  map.set(key, value);
+  if (map.size > max) map.delete(map.keys().next().value);
+  return value;
+}
+// Yield to the browser between diagram layouts so a page full of diagrams
+// cannot hold the main thread for seconds without a paint.
+function nextIdle() {
+  return new Promise((resolve) => {
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(() => resolve(), { timeout: 200 });
+    else setTimeout(resolve, 0);
+  });
+}
 export const diagnostics = { version: '1.3.0', active: false, documents: 0, diagrams: 0, repaired: 0, widgets: 0, errors: 0 };
 
 function mathPlugin(md) {
@@ -46,14 +71,26 @@ function mathPlugin(md) {
     token.content = value.trim(); token.block = true; token.map = [start, next]; state.line = next;
     return true;
   });
-  const render = displayMode => (tokens, idx) => katex.renderToString(tokens[idx].content, { displayMode, throwOnError: false, trust: false, strict: 'warn', maxExpand: 1000 });
+  const render = displayMode => (tokens, idx) => {
+    const source = tokens[idx].content;
+    const key = (displayMode ? 'd' : 'i') + '\0' + source;
+    const cached = TEX_CACHE.get(key);
+    if (cached !== undefined) return cached;
+    const html = katex.renderToString(source, { displayMode, throwOnError: false, trust: false, strict: 'warn', maxExpand: 1000 });
+    return source.length <= 5_000 ? remember(TEX_CACHE, key, html, TEX_CACHE_MAX) : html;
+  };
   md.renderer.rules.studio_math = render(false);
   md.renderer.rules.studio_math_block = render(true);
 }
 const md = new MarkdownIt({ html: true, linkify: true, typographer: false, highlight(code, lang) {
   if (code.length > 100_000) return escape(code);
-  try { if (hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value; } catch { /* plain code remains readable */ }
-  return escape(code);
+  const key = lang + '\0' + code;
+  const cached = HL_CACHE.get(key);
+  if (cached !== undefined) return cached;
+  let html;
+  try { html = hljs.getLanguage(lang) ? hljs.highlight(code, { language: lang, ignoreIllegals: true }).value : escape(code); }
+  catch { html = escape(code); /* plain code remains readable */ }
+  return code.length <= 10_000 ? remember(HL_CACHE, key, html, HL_CACHE_MAX) : html;
 }}).use(footnote).use(taskLists, { enabled: false }).use(mathPlugin);
 const fence = md.renderer.rules.fence;
 md.renderer.rules.fence = (tokens, idx, options, env, self) => {
@@ -91,7 +128,10 @@ export function localImageUrl(destination, documentPath, base = document.baseURI
 }
 export function markdownHtml(text) {
   if (text.length > MAX_DOCUMENT) throw new Error('文档超过 200 万字符，请分段查看。');
-  return DOMPurify.sanitize(md.render(text), { ADD_TAGS: ['math', 'semantics', 'annotation'], FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'style'], FORBID_ATTR: ['onerror', 'onclick'], ADD_ATTR: ['target'], ALLOW_DATA_ATTR: false });
+  const cached = HTML_CACHE.get(text);
+  if (cached !== undefined) return cached;
+  const html = DOMPurify.sanitize(md.render(text), { ADD_TAGS: ['math', 'semantics', 'annotation'], FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'style'], FORBID_ATTR: ['onerror', 'onclick'], ADD_ATTR: ['target'], ALLOW_DATA_ATTR: false });
+  return text.length <= 750_000 ? remember(HTML_CACHE, text, html, HTML_CACHE_MAX) : html;
 }
 function button(label, action, signal) {
   const el = document.createElement('button'); el.type = 'button'; el.textContent = label;
@@ -218,9 +258,22 @@ function diagramCard(pre, dark, signal) {
   full.disabled = download.disabled = true;
   toolbar.append(label, graph, code, full, download);
   queue = queue.catch(() => {}).then(async () => {
+    await nextIdle();
     if (signal.aborted || !card.isConnected) return;
     const draw = async src => {
       if (src.length > MAX_DIAGRAM || src.split('\n').length > 2000) throw new Error('此图表过大，请缩减为 5 万字符、2000 行以内。');
+      // Same source + theme is a pure function of Mermaid; reuse the previous
+      // sanitized SVG instead of laying the graph out again on every document
+      // re-render (page append, auto-refresh, EOF, theme replay).
+      const cacheKey = (dark ? 'dark\0' : 'light\0') + src;
+      const cachedSvg = SVG_CACHE.get(cacheKey);
+      if (cachedSvg !== undefined) {
+        pane.innerHTML = cachedSvg;
+        const cachedEl = pane.querySelector('svg');
+        if (!cachedEl) throw new Error('图表引擎没有返回 SVG。');
+        cachedEl.setAttribute('role', 'img'); cachedEl.setAttribute('aria-label', 'Mermaid 图表');
+        return;
+      }
       mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', suppressErrorRendering: true, theme: 'base', themeVariables: dark ? THEME_DARK : THEME_LIGHT, htmlLabels: false, flowchart: { htmlLabels: false, curve: 'basis', nodeSpacing: 45, rankSpacing: 55 }, maxTextSize: MAX_DIAGRAM, maxEdges: 2000 });
       const result = await mermaid.render(`mdstudio-${++sequence}`, src);
       const svg = DOMPurify.sanitize(result.svg, { USE_PROFILES: { svg: true, svgFilters: true, html: true }, FORBID_TAGS: ['script', 'iframe', 'object', 'embed'] });
@@ -228,6 +281,7 @@ function diagramCard(pre, dark, signal) {
       const el = pane.querySelector('svg');
       if (!el) throw new Error('图表引擎没有返回 SVG。');
       el.setAttribute('role', 'img'); el.setAttribute('aria-label', 'Mermaid 图表');
+      if (src.length <= 15_000 && svg.length <= 80_000) remember(SVG_CACHE, cacheKey, svg, SVG_CACHE_MAX);
     };
     try {
       await draw(source);
