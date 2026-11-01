@@ -2,9 +2,9 @@
 
 本项目所有显著变更都记录在此文件中。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循语义化版本。
 
-## [Unreleased]
+## [1.3.1] - 2026-11-01
 
-### 性能
+### 性能（社区贡献 [@lizi87](https://github.com/lizi87)，PR [#2](https://github.com/BioAIEvolu/dsh-md-studio/pull/2)）
 
 - **右侧预览去重复渲染**：`content.eof` 不再是渲染依赖（分页读完不再额外全量重建一遍，也不再让全部 Mermaid 图重排一次）；文本更新经 `requestAnimationFrame` 合并，自动刷新/连续追加不再逐条全量重建。
 - **内容级有界缓存**：整篇 sanitized HTML、代码块 highlight、KaTeX 公式、Mermaid SVG（按源码 + 主题）均有上限缓存；翻页、EOF、重复打开不再重跑整条管线。真机基准：10 图文档 4 页追加的主线程任务时间 806ms → 393ms，EOF 翻转 273ms → 0.5ms，连续 3 次文本更新 786ms → 52ms。
