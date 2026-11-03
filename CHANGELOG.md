@@ -2,6 +2,16 @@
 
 本项目所有显著变更都记录在此文件中。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循语义化版本。
 
+## [1.3.2] - 2026-11-03
+
+### 修复
+
+- **移除 `package.json` 开头的 UTF-8 BOM**：1.3.1 的发布包 `package.json` 带了一个不可见的 `U+FEFF`，官方 DSH harness 用 `JSON.parse` 校验 manifest 时抛 `Unexpected token '<BOM>'`，导致 `dsh plugin add/update` 一律失败并回滚 profile（[#4](https://github.com/BioAIEvolu/dsh-md-studio/issues/4)）。本版本重新打包为无 BOM 的干净 manifest；同时清理了 `src/client.js`、`src/renderer.js` 开头的同类 BOM（这些源文件本不进发布包，属同一工具链引入的隐患一并消除）。
+
+### 变更
+
+- **新增发布前守卫 `scripts/check-manifest.mjs`**：挂在 `prepack` 生命周期与 CI 上，发布前自动校验（1）`package.json` 无前导 BOM、（2）是合法 JSON、（3）`src/client.js` / `src/renderer.js` 里的版本号与 `package.json` 一致——BOM 或版本漂移在进入 tarball 之前就会被拦下。
+
 ## [1.3.1] - 2026-11-01
 
 ### 性能（社区贡献 [@lizi87](https://github.com/lizi87)，PR [#2](https://github.com/BioAIEvolu/dsh-md-studio/pull/2)）

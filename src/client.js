@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { mountMarkdown, diagnostics, watchMermaid } from './renderer.js';
 import css from './style.css';
 import katexCss from 'katex/dist/katex.min.css';
@@ -42,7 +42,7 @@ export function MarkdownBody({ content, resourceAddress, useResource }) {
     };
   }, [content.kind, content.text, absolutePath, dark, source]);
   if (content.kind !== 'text') return React.createElement('p', null, '正在读取文档…');
-  return React.createElement('section', { className: 'mds-native', 'data-md-studio': '1.3.1' },
+  return React.createElement('section', { className: 'mds-native', 'data-md-studio': '1.3.2' },
     React.createElement('div', { className: 'mds-document-tools' },
       React.createElement('span', null, 'Markdown Studio'),
       React.createElement('button', { type: 'button', onClick: () => setSource(!source), 'aria-pressed': source }, source ? '阅读文档' : '查看源码')),
