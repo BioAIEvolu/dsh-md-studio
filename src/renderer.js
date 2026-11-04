@@ -1,4 +1,4 @@
-﻿import MarkdownIt from 'markdown-it';
+import MarkdownIt from 'markdown-it';
 import footnote from 'markdown-it-footnote';
 import taskLists from 'markdown-it-task-lists';
 import DOMPurify from 'dompurify';
@@ -364,17 +364,23 @@ const MERMAID_TYPES = new Set([
   'packet', 'architecture-beta', 'sankey-beta', 'xychart-beta', 'zenuml',
 ]);
 const MERMAID_LANG_RE = /^language-(?:mermaid|mermaidjs|mmd)$/i;
-function diagramTypeOf(source) {
-  const m = /^\s*([A-Za-z][\w-]*)/.exec(source || '');
-  return m ? m[1] : '';
-}
+/** A diagram keyword followed by one of these starts ordinary code, not a header. */
+const CODE_AFTER_TYPE_RE = /^[=(.[,{<+*/%&|^~!?:;"'`\\]/;
+
 function isMermaidCodeBlock(code) {
   const pre = code?.closest?.('pre');
   if (!pre) return false;
   const classes = Array.from(code.classList || []);
   if (classes.some((n) => MERMAID_LANG_RE.test(n))) return true;
   if (classes.some((n) => /^language-/i.test(n))) return false;
-  return MERMAID_TYPES.has(diagramTypeOf((code.textContent || '').trim()));
+  // DSH code blocks carry no 'language-*' class (highlighted ones are shiki
+  // markup), so the class checks above never decide for chat content and the
+  // header has to be inspected instead. A diagram header continues with
+  // whitespace or ends right after the keyword; 'graph = {}' and 'pie(x)' are
+  // ordinary code that merely starts with a keyword and must not be wrapped.
+  const m = /^\s*([A-Za-z][\w-]*)([\s\S]*)$/.exec(code.textContent || '');
+  if (!m || !MERMAID_TYPES.has(m[1])) return false;
+  return !CODE_AFTER_TYPE_RE.test(m[2].trimStart());
 }
 
 const chatEntries = new Map(); // code element -> { wrapper?, pre?, timer?, text? }
@@ -414,7 +420,7 @@ function widgetCardFromCode(code, dark) {
   diagnostics.widgets++;
   return card;
 }
-export function watchMermaid(target, { getDark = () => false } = {}) {
+export function watchMermaid(target, { getDark = () => false, chatRootSelector = null } = {}) {
   if (typeof document === 'undefined' || !target) return { dispose() {}, rebuildAll() {} };
   if (!chatSignal || chatSignal.signal.aborted) chatSignal = new AbortController();
   const schedule = (code) => {
@@ -434,7 +440,7 @@ export function watchMermaid(target, { getDark = () => false } = {}) {
     }, CHAT_STABLE_MS);
     chatEntries.set(code, entry);
   };
-  const observer = new MutationObserver((mutations) => {
+  const handle = (mutations) => {
     const seen = new Set();
     for (const m of mutations) {
       if (m.type === 'childList') {
@@ -471,8 +477,31 @@ export function watchMermaid(target, { getDark = () => false } = {}) {
       }
       if (isMermaidCodeBlock(code)) schedule(code);
     }
-  });
-  observer.observe(target, { childList: true, subtree: true, characterData: true });
+  };
+  // The transcript is the only region that can hold assistant code blocks, so
+  // watching it instead of document.body keeps this callback off every
+  // unrelated DOM change (sidebar, composer, toasts). The transcript mounts and
+  // unmounts with the session view, hence the periodic reconcile; that is far
+  // cheaper than a subtree observer on body just to discover it.
+  const roots = new Map();
+  const attach = (el) => {
+    if (roots.has(el)) return;
+    const obs = new MutationObserver(handle);
+    obs.observe(el, { childList: true, subtree: true, characterData: true });
+    roots.set(el, obs);
+  };
+  const detach = (el) => { const obs = roots.get(el); if (obs) { obs.disconnect(); roots.delete(el); } };
+  const syncRoots = () => {
+    const all = chatRootSelector ? Array.from(document.querySelectorAll(chatRootSelector)) : [];
+    // The attribute sits on both the transcript column and each group's content
+    // seat; keeping only the outermost roots avoids handling one mutation twice.
+    const wanted = all.filter((el) => !el.parentElement?.closest(chatRootSelector));
+    if (wanted.length === 0) { attach(target); return; }
+    for (const el of [...roots.keys()]) if (!wanted.includes(el)) detach(el);
+    for (const el of wanted) attach(el);
+  };
+  syncRoots();
+  const reconcile = chatRootSelector ? setInterval(syncRoots, 1000) : null;
   const rebuildAll = () => {
     for (const code of [...chatEntries.keys()]) {
       const entry = chatEntries.get(code);
@@ -485,7 +514,8 @@ export function watchMermaid(target, { getDark = () => false } = {}) {
   };
   return {
     dispose() {
-      observer.disconnect();
+      if (reconcile) clearInterval(reconcile);
+      for (const el of [...roots.keys()]) detach(el);
       for (const code of [...chatEntries.keys()]) disposeChat(code);
       chatSignal = null;
     },

@@ -2,6 +2,21 @@
 
 本项目所有显著变更都记录在此文件中。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循语义化版本。
 
+## [Unreleased]
+
+### 性能
+
+- **聊天侧 MutationObserver 收窄**：监听目标从 `document.body` 收窄到对话容器 `[data-chat-flow]`，且只取最外层（该属性同时出现在消息列与分组内容座上，全挂会让同一次变更被处理两遍）。此前侧边栏、输入框、提示条等任何 DOM 变化都会进回调并触发 `querySelectorAll('pre > code')` 递归扫描；现在只处理对话区。容器尚未挂载时回退到原行为，挂载状态按秒级 reconcile 跟踪。
+- 上游 1.3.1 的 CHANGELOG 已把「聊天侧 MutationObserver 收窄」列为后续工作，本次落地。
+
+### 修复
+
+- **图表误判**：`graph = {}`、`pie(x)` 这类以图表关键字开头、实际是普通代码的块，此前会被当作 Mermaid 包装成卡片，原代码被 `hidden` 隐藏，渲染失败后显示「图表未能绘制」。判据改为「关键字之后必须是空白或直接结束」——代码符号（`=`、`(`、`[`、`{`、`.` 等）开头一律不认。
+
+### 说明
+
+- DSH 对话里的代码块不带 `language-*` 类（高亮路径是 shiki 生成的 HTML），所以 `isMermaidCodeBlock` 里的类名短路对聊天内容从不生效，只能靠首词判定。这一点已写进源码注释，避免后续维护者误以为类名检查能兜住。
+
 ## [1.3.1] - 2026-11-01
 
 ### 性能（社区贡献 [@lizi87](https://github.com/lizi87)，PR [#2](https://github.com/BioAIEvolu/dsh-md-studio/pull/2)）

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { mountMarkdown, diagnostics, watchMermaid } from './renderer.js';
 import css from './style.css';
 import katexCss from 'katex/dist/katex.min.css';
@@ -7,6 +7,9 @@ import highlightCss from 'highlight.js/styles/github-dark.css';
 export const name = 'dsh-md-studio';
 export const inject = ['slots'];
 const MARKDOWN_KEY = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown';
+// Assistant code blocks only ever appear inside the chat transcript; watching it
+// instead of document.body keeps the Mermaid watcher off unrelated DOM churn.
+const CHAT_ROOT_SELECTOR = '[data-chat-flow]';
 
 function darkMode() { return document.body.hasAttribute('data-ds-dark-theme') || document.documentElement.dataset.theme === 'dark'; }
 
@@ -70,7 +73,7 @@ export function apply(ctx) {
   // and re-renders everything on theme flips.
   ctx.effect(() => {
     if (typeof document === 'undefined' || !document.body) return;
-    const watcher = watchMermaid(document.body, { getDark: darkMode });
+    const watcher = watchMermaid(document.body, { getDark: darkMode, chatRootSelector: CHAT_ROOT_SELECTOR });
     const themeObserver = new MutationObserver(() => watcher.rebuildAll());
     themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme'] });
     return () => { themeObserver.disconnect(); watcher.dispose(); };
