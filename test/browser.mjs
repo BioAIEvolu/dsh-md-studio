@@ -138,12 +138,61 @@ await page.waitForFunction(() => {
 }, { timeout: 60000 });
 assert.ok((await page.locator('#chat-simulator svg').last().textContent()).replace(/\s+/g, '').includes('稳定输出'), 'streamed chat diagram must show final content');
 assert.equal(await page.locator('#chat-simulator .mds-diagram').count(), 2, 'streaming must produce exactly one card per block');
+// v1.3.2 regression: a bare SVG block (NO fence language) must render as a widget card.
+await page.evaluate(() => {
+  const wrap = document.createElement('div');
+  wrap.innerHTML = '<pre><code>' +
+    '&lt;svg viewBox="0 0 300 80" width="100%" font-family="system-ui,sans-serif"&gt;\n' +
+    '  &lt;title&gt;架构总览&lt;/title&gt;\n' +
+    '  &lt;rect x="10" y="20" rx="8" width="120" height="40" fill="#3B82F6"/&gt;\n' +
+    '  &lt;text x="70" y="46" text-anchor="middle" fill="#fff" font-size="13"&gt;前端&lt;/text&gt;\n' +
+    '  &lt;rect x="170" y="20" rx="8" width="120" height="40" fill="#8B5CF6"/&gt;\n' +
+    '  &lt;text x="230" y="46" text-anchor="middle" fill="#fff" font-size="13"&gt;后端&lt;/text&gt;\n' +
+    '&lt;/svg&gt;' +
+    '</code></pre>';
+  window.__chat.appendChild(wrap);
+});
+await page.waitForSelector('#chat-simulator .mds-widget .mds-widget-body svg', { timeout: 60000 });
+assert.ok(await page.locator('#chat-simulator .mds-widget-title:has-text("架构总览")').count(), 'bare SVG block must become a widget card with its <title>');
+assert.equal(await page.locator('#chat-simulator .mds-widget script, #chat-simulator .mds-widget foreignObject').count(), 0, 'widget card must stay sanitized');
+// Non-diagram code blocks must remain untouched by the watcher.
+await page.evaluate(() => {
+  const wrap = document.createElement('div');
+  wrap.innerHTML = '<pre><code>const x = 1;\nconsole.log(x);</code></pre>';
+  window.__chat.appendChild(wrap);
+});
+await page.waitForTimeout(1200);
+assert.equal(await page.locator('#chat-simulator .mds-widget').count(), 1, 'plain code must not become a widget');
+assert.equal(await page.locator('#chat-simulator pre:not([hidden])').filter({ hasText: 'const x = 1' }).count(), 1, 'plain code block stays visible');
 // Theme flip: chat cards re-render and stay ok (light -> back to dark).
 await page.evaluate(() => document.body.removeAttribute('data-ds-dark-theme'));
 await page.waitForFunction(() => window.__dshMdStudio.diagrams >= 16);
 assert.equal(await page.locator('#chat-simulator .mds-diagram[data-state="ok"] svg').count(), 2);
 await page.evaluate(() => document.body.setAttribute('data-ds-dark-theme', ''));
 await page.waitForFunction(() => window.__dshMdStudio.diagrams >= 18);
+// v1.3.2: document-side widget — explicit mds-diagram fence AND bare-svg fence both hydrate.
+await page.evaluate(text => window.__render(text), [
+  '## 组件图',
+  '',
+  '```mds-diagram 分层架构',
+  '<svg viewBox="0 0 320 90" width="100%" font-family="system-ui,sans-serif">',
+  '  <title>分层架构</title>',
+  '  <rect x="10" y="22" rx="8" width="130" height="44" fill="#3B82F6"/>',
+  '  <text x="75" y="50" text-anchor="middle" fill="#fff" font-size="14">表现层</text>',
+  '  <rect x="180" y="22" rx="8" width="130" height="44" fill="#8B5CF6"/>',
+  '  <text x="245" y="50" text-anchor="middle" fill="#fff" font-size="14">数据层</text>',
+  '</svg>',
+  '```',
+  '',
+  '```',
+  '<svg viewBox="0 0 200 60" width="100%"><title>裸围栏</title><rect x="10" y="10" rx="8" width="180" height="40" fill="#10B981"/><text x="100" y="36" text-anchor="middle" fill="#fff" font-size="13">无语言</text></svg>',
+  '```',
+].join('\n'));
+await page.waitForSelector('[data-mds-root] .mds-widget .mds-widget-body svg', { timeout: 60000 });
+assert.equal(await page.locator('[data-mds-root] .mds-widget').count(), 2, 'explicit and bare-svg fences both hydrate into widget cards');
+assert.ok(await page.locator('[data-mds-root] .mds-widget-title:has-text("分层架构")').count(), 'explicit fence keeps its title');
+assert.ok(await page.locator('[data-mds-root] .mds-widget-title:has-text("裸围栏")').count(), 'bare fence takes title from svg <title>');
+assert.equal(await page.locator('[data-mds-root] .mds-widget script, [data-mds-root] .mds-widget foreignObject').count(), 0, 'document widgets stay sanitized');
 // Unmount the chat simulator: cards must be garbage collected.
 const chatCardsBefore = await page.locator('.mds-diagram').count();
 await page.evaluate(() => window.__chat.remove());
@@ -154,7 +203,7 @@ await page.evaluate(() => { window.__root.unmount(); window.__effects.reverse().
 assert.equal(await page.locator('style[data-plugin="dsh-md-studio"]').count(), 0);
 assert.equal(errors.length, 0, JSON.stringify(errors));
 assert.equal(network.length, 0, 'Renderer should make zero network requests: '+JSON.stringify(network));
-const result = {passed:true,browser:await browser.version(),nativeSlot:registration.options.key,svgDiagrams:5,externalRequests:network.length,pageErrors:errors.length,checks:['GFM table','task lists','footnotes','inline and block KaTeX','syntax highlight','four Mermaid types','mermaid syntax auto-repair','source toggle','fullscreen','SVG download','dark theme rerender','invalid diagram isolation','HTML sanitization','file switching','plugin disposal','chat mermaid rendering','chat streaming stability','chat no-double-render','chat theme rebuild','chat disposal'],status};
+const result = {passed:true,browser:await browser.version(),nativeSlot:registration.options.key,svgDiagrams:5,externalRequests:network.length,pageErrors:errors.length,checks:['GFM table','task lists','footnotes','inline and block KaTeX','syntax highlight','four Mermaid types','mermaid syntax auto-repair','source toggle','fullscreen','SVG download','dark theme rerender','invalid diagram isolation','HTML sanitization','file switching','plugin disposal','chat mermaid rendering','chat streaming stability','chat no-double-render','chat bare-svg widget','plain code untouched','chat theme rebuild','doc mds-diagram widget','doc bare-svg widget','chat disposal'],status};
 await writeFile(resolve(root,'test/artifacts/result.json'),JSON.stringify(result,null,2));
 console.log(JSON.stringify(result,null,2));
 await browser.close();

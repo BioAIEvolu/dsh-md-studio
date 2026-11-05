@@ -36,7 +36,7 @@ function nextIdle() {
     else setTimeout(resolve, 0);
   });
 }
-export const diagnostics = { version: '1.3.1', active: false, documents: 0, diagrams: 0, repaired: 0, widgets: 0, errors: 0 };
+export const diagnostics = { version: '1.3.2', active: false, documents: 0, diagrams: 0, repaired: 0, widgets: 0, errors: 0 };
 
 function mathPlugin(md) {
   md.inline.ruler.before('escape', 'studio_math', (state, silent) => {
@@ -98,6 +98,9 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const lang = info.split(/\s+/)[0].toLowerCase();
   if (['mermaid', 'mmd', 'mermaidjs'].includes(lang)) return `<pre class="mds-diagram-source"><code class="language-mermaid">${escape(tokens[idx].content)}</code></pre>`;
   if (['mds-diagram', 'mds-widget', 'mds-svg'].includes(lang)) return widgetHtml(tokens[idx].content, info.slice(lang.length).trim());
+  // Lenient: a bare fenced block whose content IS an inline SVG document renders
+  // as a widget even without the mds-diagram language tag (models often omit it).
+  if (!lang && /^\s*<svg[\s>]/i.test(tokens[idx].content)) return widgetHtml(tokens[idx].content, '');
   return fence(tokens, idx, options, env, self);
 };
 
@@ -384,6 +387,9 @@ let chatSignal = null;
 function isInsideExcluded(el) {
   return !!el.closest?.('.mds-diagram, [data-mds-root], .dsh-mmd, .dsh-mds-mmd, .mds-widget');
 }
+/** Lenient widget match: a code block whose content is an inline SVG document,
+ *  regardless of fence language (models often omit it). */
+const isSvgSource = (t) => /^\s*<svg[\s>]/i.test(String(t || ''));
 function disposeChat(code) {
   const entry = chatEntries.get(code);
   if (!entry) return;
@@ -428,7 +434,7 @@ export function watchMermaid(target, { getDark = () => false } = {}) {
       const pre = code.closest('pre');
       if (!pre) return;
       const source = (code.textContent || '').trim();
-      if (source.startsWith('<svg')) { entry.wrapper = widgetCardFromCode(code, getDark()); if (entry.wrapper) return; }
+      if (isSvgSource(source)) { entry.wrapper = widgetCardFromCode(code, getDark()); if (entry.wrapper) return; }
       if (!isMermaidCodeBlock(code)) { disposeChat(code); return; }
       entry.wrapper = diagramCard(pre, getDark(), chatSignal.signal);
     }, CHAT_STABLE_MS);
@@ -469,7 +475,9 @@ export function watchMermaid(target, { getDark = () => false } = {}) {
         if ((code.textContent || '').trim() === entry.text) continue;
         disposeChat(code); // stream rewrote the diagram: rebuild from scratch
       }
-      if (isMermaidCodeBlock(code)) schedule(code);
+      // Gate must admit BOTH mermaid blocks and bare-SVG widget blocks —
+      // the timer callback triages (svg → widget card, mermaid → diagram card).
+      if (isMermaidCodeBlock(code) || isSvgSource(code.textContent)) schedule(code);
     }
   });
   observer.observe(target, { childList: true, subtree: true, characterData: true });
@@ -480,7 +488,7 @@ export function watchMermaid(target, { getDark = () => false } = {}) {
       if (entry?.wrapper?.classList?.contains('mds-widget')) continue;
       if (!code.isConnected) { disposeChat(code); continue; }
       disposeChat(code);
-      if (isMermaidCodeBlock(code)) schedule(code);
+      if (isMermaidCodeBlock(code) || isSvgSource(code.textContent)) schedule(code);
     }
   };
   return {
