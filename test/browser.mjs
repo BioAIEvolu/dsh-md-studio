@@ -185,7 +185,7 @@ await page.evaluate(text => window.__render(text), [
   '```',
   '',
   '```',
-  '<svg viewBox="0 0 200 60" width="100%"><title>裸围栏</title><rect x="10" y="10" rx="8" width="180" height="40" fill="#10B981"/><text x="100" y="36" text-anchor="middle" fill="#fff" font-size="13">无语言</text></svg>',
+  '<svg viewBox="0 0 200 60" width="100%"><title>裸围栏</title><rect x="10" y="10" rx="8" width="180" height="40" fill="#10B981"/><text x="100" y="36" text-anchor="middle" fill="#fff" font-size="13">无语言</text><text x="100" y="54" text-anchor="middle" font-size="12">无填充兜底</text></svg>',
   '```',
 ].join('\n'));
 await page.waitForSelector('[data-mds-root] .mds-widget .mds-widget-body svg', { timeout: 60000 });
@@ -193,6 +193,24 @@ assert.equal(await page.locator('[data-mds-root] .mds-widget').count(), 2, 'expl
 assert.ok(await page.locator('[data-mds-root] .mds-widget-title:has-text("分层架构")').count(), 'explicit fence keeps its title');
 assert.ok(await page.locator('[data-mds-root] .mds-widget-title:has-text("裸围栏")').count(), 'bare fence takes title from svg <title>');
 assert.equal(await page.locator('[data-mds-root] .mds-widget script, [data-mds-root] .mds-widget foreignObject').count(), 0, 'document widgets stay sanitized');
+// Dark-mode fallback: a <text> without fill follows var(--dsw-alias-label-primary).
+// (The page is in dark state here — the theme-flip section set the token on body.)
+const noFill = page.locator('[data-mds-root] .mds-widget-body text', { hasText: '无填充兜底' });
+assert.equal(await noFill.count(), 1, 'no-fill text present');
+const tokenFill = await page.evaluate(() => getComputedStyle(document.body).getPropertyValue('--dsw-alias-label-primary').trim());
+const currentFill = await noFill.evaluate(t => getComputedStyle(t).fill);
+assert.ok(tokenFill && currentFill.includes(tokenFill.replace('#', '') === '' ? tokenFill : tokenFill) || /rgb\(230,\s*237,\s*243\)/.test(currentFill), 'fill follows body theme token, got ' + currentFill + ' vs token ' + tokenFill);
+await page.evaluate(() => { document.body.style.removeProperty('--dsw-alias-label-primary'); });
+const lightFill = await noFill.evaluate(t => getComputedStyle(t).fill);
+assert.ok(/rgb\(31,\s*41,\s*55\)/.test(lightFill), 'falls back to #1F2937 without token, got ' + lightFill);
+const nearestWins = await noFill.evaluate(t => {
+  const card = t.closest('.mds-widget');
+  card.style.setProperty('--dsw-alias-label-primary', 'rgb(229, 231, 235)');
+  const fill = getComputedStyle(t).fill;
+  card.style.removeProperty('--dsw-alias-label-primary');
+  return fill;
+});
+assert.ok(/rgb\(229,\s*231,\s*235\)/.test(nearestWins), 'nearest token wins, got ' + nearestWins);
 // Unmount the chat simulator: cards must be garbage collected.
 const chatCardsBefore = await page.locator('.mds-diagram').count();
 await page.evaluate(() => window.__chat.remove());

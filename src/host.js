@@ -1,19 +1,27 @@
-// dsh-md-studio host half (source of truth; build script copies to lib/index.js).
+// dsh-md-studio host half.
 //
 // 1. Serves an optional vendored mermaid runtime from ./runtime (offline mode).
-// 2. Registers a system-prompt section teaching the model how to emit
-//    ```mds-diagram blocks — model-authored SVG widgets rendered by the
-//    browser half into themed cards (the WorkBuddy "show_widget" pattern).
+// 2. Registers a system-prompt section teaching the model the mds-diagram
+//    fence and the theme-variable text rule (the full drawing spec ships as
+//    the mds-diagram-design skill, installed below).
+// 3. Installs the bundled drawing-spec skill into the user skills root
+//    (~/.agents/skills/mds-diagram-design) so any model can load it on demand;
+//    refresh on version change, and uninstall only if the content is still
+//    ours (never delete user edits).
 
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { join, normalize, sep } from "node:path";
+import { join, normalize, sep, dirname } from "node:path";
+import { homedir } from "node:os";
 
 const name = "dsh-md-studio";
 const inject = ["webServer", "systemPrompt"];
 
 const RUNTIME_ROUTE = "/dsh-md-studio/runtime";
 const runtimeDir = fileURLToPath(new URL("./runtime", import.meta.url));
+const SKILL_NAME = "mds-diagram-design";
+const skillSrcDir = fileURLToPath(new URL("../skills/mds-diagram-design", import.meta.url));
+const skillDstDir = join(homedir(), ".agents", "skills", SKILL_NAME);
 
 const MIME = {
   ".js": "text/javascript; charset=utf-8",
@@ -29,20 +37,31 @@ const MIME = {
 
 const GUIDELINE = `## 图表组件（mds-diagram）
 
-当需要输出高质量示意图、流程图、架构分层图或对比图时，优先使用 \`\`\`mds-diagram 围栏（而非 mermaid），内容为一个完整的手写 SVG。渲染环境会自动套用主题卡片并净化内容。
+需要画架构图/流程图/示意图时，优先用 \`\`\`mds-diagram <可选标题> 围栏输出手写 SVG（简单流程继续用 mermaid 围栏）。完整绘图规范（色板/布局/关系表达/自查清单）请用 skill 工具加载 **mds-diagram-design** skill 后遵循。
 
-设计规范（深浅主题通吃）：
-- 根元素：<svg viewBox="0 0 W H" width="100%" font-family="system-ui,sans-serif">，不设背景色
-- 节点填充主色 #3B82F6（白字），强调/辅助 #8B5CF6，成功 #10B981，警告 #F59E0B，危险 #EF4444
-- 连接线 #94A3B8，文字 fill 白色（在实色节点上）或 #1F2937（在浅底上）
-- 圆角 rect rx=8~10，节点内边距 ≥12px，字号 13~15px
-- 分组/分层容器用半透明底色 rgba(59,130,246,.08) + 描边 rgba(59,130,246,.35)
-- 编号用圆形 badge（circle + 白色居中数字）
-- 箭头用 <marker> 定义，id 唯一
-- 在 <svg> 内放 <title> 描述图表用途（作为卡片标题）
-- 每个文本元素显式设 fill；不要依赖默认继承
+必须遵守的三条硬规则：
+1. 画布级文字（图例、分组标签）用主题变量：style="fill:var(--dsw-alias-label-primary,#1F2937)"——禁止硬编码深灰，深色模式下会不可见。
+2. 节点用浅色底+深色字（蓝 #B5D4F4/#0C447C，橙 #FAC775/#633806，绿 #9FE1CB/#085041，紫 #CECBF6/#3C3489），全图最多 4 种语义色，≥3 种时必须有图例。
+3. 根元素 <svg viewBox="0 0 W H" width="100%" font-family="system-ui,sans-serif">，内放 <title>（作为卡片标题），箭头 marker id 加随机后缀防冲突。`;
 
-仅在图表有明确结构化表达价值时使用；简单流程继续用 mermaid 围栏。`;
+async function installSkill() {
+  const srcFile = join(skillSrcDir, "SKILL.md");
+  const dstFile = join(skillDstDir, "SKILL.md");
+  let src;
+  try { src = await readFile(srcFile); } catch { return () => {}; } // skill not bundled — noop
+  let dst;
+  try { dst = await readFile(dstFile); } catch { /* not installed yet */ }
+  if (dst && dst.equals(src)) return () => {}; // already current
+  await mkdir(dirname(dstFile), { recursive: true });
+  await writeFile(dstFile, src);
+  return async () => {
+    // Uninstall only if the file is still exactly what we installed.
+    try {
+      const cur = await readFile(dstFile);
+      if (cur.equals(src)) await rm(skillDstDir, { recursive: true, force: true });
+    } catch { /* already gone */ }
+  };
+}
 
 function apply(ctx) {
   ctx.effect(
@@ -103,6 +122,12 @@ function apply(ctx) {
     }),
     "dsh-md-studio: diagram design guidelines",
   );
+  let uninstall = () => {};
+  let disposed = false;
+  ctx.effect(() => {
+    installSkill().then((fn) => { if (disposed) fn(); else uninstall = fn; }).catch(() => {});
+    return () => { disposed = true; uninstall(); };
+  }, "dsh-md-studio: skill install");
 }
 
 export { apply, inject, name };

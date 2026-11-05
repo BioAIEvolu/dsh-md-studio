@@ -2,6 +2,18 @@
 
 本项目所有显著变更都记录在此文件中。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循语义化版本。
 
+## [1.3.3] - 2026-11-05
+
+### 新增
+
+- **mds-diagram-design 绘图规范 skill 随插件分发**：安装插件即把 skill 装入用户技能目录（~/.agents/skills/），模型画示意图时可用 skill 工具加载完整规范（色板/字体阶/布局/关系表达/自查清单）。数据基于对 WorkBuddy widget 设计系统的逆向取证（REA 运行时证据：8 个真实 widget 源码的配色与主题变量用法）。
+- **深色模式画布文字兜底**：widget 卡片内未显式指定 fill 的 `<text>` 自动继承 `var(--dsw-alias-label-primary)`——模型不按规范写时深色模式下也不再瞎。
+
+### 变更
+
+- systemPrompt 绘图指引精简为三条硬规则 + skill 指针（完整规范在 skill 里，避免常驻 token 膨胀）。
+- 设计系统换代：浅色底+深色字的 pastel 芯片配色（蓝 #B5D4F4/#0C447C、橙 #FAC775/#633806、绿 #9FE1CB/#085041、紫 #CECBF6/#3C3489），画布级文字一律用 DSH 主题变量——与主题无关的可读性 + 随主题翻转的文字。
+
 ## [1.3.2] - 2026-11-05
 
 ### 修复

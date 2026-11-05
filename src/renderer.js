@@ -36,7 +36,7 @@ function nextIdle() {
     else setTimeout(resolve, 0);
   });
 }
-export const diagnostics = { version: '1.3.2', active: false, documents: 0, diagrams: 0, repaired: 0, widgets: 0, errors: 0 };
+export const diagnostics = { version: '1.3.3', active: false, documents: 0, diagrams: 0, repaired: 0, widgets: 0, errors: 0 };
 
 function mathPlugin(md) {
   md.inline.ruler.before('escape', 'studio_math', (state, silent) => {
