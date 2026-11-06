@@ -113,10 +113,8 @@ export function widgetHtml(svgSource, title) {
   return `<div class="mds-widget" data-mds-widget="1"><div class="mds-widget-title">${escape(title || autoTitle || '图表')}</div><pre class="mds-widget-src">${escape(source)}</pre></div>`;
 }
 
-// Same authenticated native media route used by DSH's MarkdownBody. No arbitrary static-file server.
-export function localImageUrl(destination, documentPath, base = document.baseURI) {
-  if (/^https?:\/\//i.test(destination) || /^data:image\/(png|jpeg|gif|webp);base64,/i.test(destination)) return destination;
-  if (/^[/\\]{2}/.test(destination)) return undefined;
+// Resolve a local destination beside the previewed file to an absolute path.
+export function localFilePath(destination, documentPath) {
   let path;
   try { path = decodeURIComponent(destination.split(/[?#]/)[0]); } catch { return undefined; }
   if (!path || /[\x00-\x1f\x7f]/.test(path)) return undefined;
@@ -126,8 +124,37 @@ export function localImageUrl(destination, documentPath, base = document.baseURI
     const i = Math.max(documentPath.lastIndexOf('/'), documentPath.lastIndexOf('\\'));
     path = documentPath.slice(0, i + 1) + path;
   }
+  return path;
+}
+
+// Same authenticated native media route used by DSH's MarkdownBody. No arbitrary static-file server.
+export function localImageUrl(destination, documentPath, base = document.baseURI) {
+  if (/^https?:\/\//i.test(destination) || /^data:image\/(png|jpeg|gif|webp);base64,/i.test(destination)) return destination;
+  if (/^[/\\]{2}/.test(destination)) return undefined;
+  const path = localFilePath(destination, documentPath);
+  if (path === undefined) return undefined;
   if (!/^(https?:|dsh-app:)/.test(base)) return undefined;
   return new URL(`api/file?path=${encodeURIComponent(path)}`, base).href;
+}
+
+// Build a Session-scoped file address for a target beside the current document.
+// Document previews only claim session-scoped addresses (absolute scope is rejected by canOpen).
+export function sessionFileAddressFor(resourceAddress, documentPath, targetPath) {
+  const prefix = 'dsh-resource://file/session/';
+  if (!resourceAddress?.startsWith(prefix) || !documentPath || !targetPath) return undefined;
+  const rest = resourceAddress.slice(prefix.length);
+  const slash = rest.indexOf('/');
+  if (slash < 0) return undefined;
+  const sessionId = rest.slice(0, slash);
+  let currentRel;
+  try { currentRel = decodeURIComponent(rest.slice(slash + 1)); } catch { return undefined; }
+  if (!documentPath.endsWith(currentRel)) return undefined;
+  const cwd = documentPath.slice(0, documentPath.length - currentRel.length);
+  const normalizedTarget = targetPath.replace(/\\/g, '/');
+  if (!normalizedTarget.startsWith(cwd)) return undefined;
+  const targetRel = normalizedTarget.slice(cwd.length);
+  return prefix + encodeURIComponent(sessionId) + '/' + targetRel.split('/')
+    .map(segment => encodeURIComponent(segment)).join('/');
 }
 export function markdownHtml(text) {
   if (text.length > MAX_DOCUMENT) throw new Error('文档超过 200 万字符，请分段查看。');
@@ -311,7 +338,7 @@ function diagramCard(pre, dark, signal) {
   });
   return queue;
 }
-export function mountMarkdown(root, text, { documentPath, dark = false } = {}) {
+export function mountMarkdown(root, text, { documentPath, dark = false, openFile, resourceAddress } = {}) {
   const controller = new AbortController(); const { signal } = controller;
   root.classList.add('mds-document'); root.dataset.mdsVersion = diagnostics.version;
   root.dataset.state = 'rendering';
@@ -330,7 +357,22 @@ export function mountMarkdown(root, text, { documentPath, dark = false } = {}) {
   root.querySelectorAll('a[href]').forEach(a => {
     const href = a.getAttribute('href');
     if (href.startsWith('#')) a.addEventListener('click', e => { e.preventDefault(); let id; try { id = decodeURIComponent(href.slice(1)); } catch { return; } [...root.querySelectorAll('[id]')].find(n => n.id === id)?.scrollIntoView({ block: 'start' }); }, { signal });
-    else { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
+    else {
+      const localPath = localFilePath(href, documentPath);
+      const targetAddress = localPath && openFile && /\.md$/i.test(localPath)
+        ? sessionFileAddressFor(resourceAddress, documentPath, localPath) : undefined;
+      // Markdown links open in the right-side preview, not as raw bytes in a new tab.
+      if (targetAddress !== undefined) {
+        a.addEventListener('click', e => { e.preventDefault(); openFile(targetAddress); }, { signal });
+        a.removeAttribute('target');
+      } else {
+        // Non-Markdown files use the authenticated media route; a raw relative
+        // href resolves against the Web page URL and 404s.
+        const local = localImageUrl(href, documentPath);
+        if (local) a.href = local;
+        a.target = '_blank'; a.rel = 'noopener noreferrer';
+      }
+    }
   });
   const jobs = [...root.querySelectorAll('pre.mds-diagram-source')].map(pre => diagramCard(pre, dark, signal));
   // Hydrate mds-diagram widget placeholders: swap escaped SVG source for the
