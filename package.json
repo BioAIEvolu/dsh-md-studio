@@ -1,6 +1,6 @@
 ﻿{
     "name":  "dsh-md-studio",
-    "version":  "1.3.3",
+    "version": "1.3.4",
     "description":  "Markdown Studio：在 DSH 原生右侧文件预览与对话消息中渲染 Mermaid 图表、手写 SVG 组件（mds-diagram / 裸 svg 块，随包附 mds-diagram-design 绘图规范 skill）、KaTeX 公式、GFM 表格及代码高亮。渲染引擎随包内置，完全离线可用。 / Native DSH right-sidebar preview + in-chat rendering for Mermaid diagrams, hand-written SVG components (mds-diagram / bare svg blocks, with the bundled mds-diagram-design skill), KaTeX math, GFM tables and syntax highlighting — fully offline.",
     "keywords":  [
                      "deepseek-harness",
