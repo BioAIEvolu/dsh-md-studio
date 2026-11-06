@@ -34,6 +34,7 @@ DeepSeek Harness 的右侧文件预览很好用，但 **Mermaid 代码块只会�
 ## ✨ 特性
 
 - **📈 对话内 + 文档预览双渲染**：聊天消息里的 Mermaid 块与右侧打开的 Markdown 文档，用同一套管线就地渲染成彩色 SVG 图
+- **🖼️ 对话内手写 SVG 直接渲染**：模型在聊天中输出裸 `<svg>` 代码块（无需任何围栏语言）即自动渲染为主题卡片——不依赖模型记住 `mds-diagram` 语法
 - **🎨 现代彩色主题**：基于 mermaid base 主题自定义亮/暗双套 themeVariables——蓝紫主色 + 多彩辅色（饼图/甘特图/gitGraph 各自成套），平滑曲线 + 呼吸间距，告别默认灰紫
 - **🧩 mds-diagram SVG 组件 + 绘图规范 skill**：模型可输出手写 SVG（`mds-diagram` 围栏或裸 `<svg>` 块），渲染为主题卡片；插件内置 `mds-diagram-design` 绘图规范 skill（安装即注入技能目录，模型按需加载）——pastel 芯片配色、字体阶、布局网格、关系表达惯例、深浅主题适配与自查清单，设计系统源自 WorkBuddy widget 设计体系的逆向取证
 - **📈 Mermaid 图表**：流程图、时序图、甘特图、饼图等 Mermaid 11 全系图型；每张图带 **图形/源码切换 · 全屏（缩放/拖拽）· 下载 SVG** 工具栏；深浅主题自动重绘

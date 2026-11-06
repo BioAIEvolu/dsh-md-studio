@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 # 📄 Markdown Studio for DeepSeek Harness
 
@@ -33,6 +33,7 @@ DeepSeek Harness's right-sidebar preview is great — except ` ```mermaid ` bloc
 ## ✨ Features
 
 - **📈 Mermaid diagrams, chat + documents** — the same pipeline renders ` ```mermaid ` blocks in chat messages and in opened documents: flowcharts, sequence, gantt, pie and the full Mermaid 11 family; per-diagram toolbar with **diagram/source toggle · fullscreen (zoom & pan) · SVG download**; automatic re-render on theme change
+- **🖼️ In-chat hand-written SVG rendering** — a bare `<svg>` code block in chat (no fence language needed) automatically renders as a themed widget card; models don't have to remember the `mds-diagram` syntax
 - **🩹 Syntax auto-repair** — the most common real-world breaker, ASCII parentheses inside node labels (`W2[Codex / Claude Code (ACP)]`), is repaired and rendered with an "auto-repaired" badge. No need to edit your documents
 - **📐 KaTeX math** — inline `$...$` and display `$$...$$`
 - **📝 Full GFM** — tables, task lists, footnotes, heading anchors
