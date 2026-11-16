@@ -5,8 +5,11 @@ import katexCss from 'katex/dist/katex.min.css';
 import highlightCss from 'highlight.js/styles/github-dark.css';
 
 export const name = 'dsh-md-studio';
-export const inject = ['slots'];
+export const inject = ['slots', 'sidebarRight'];
 const MARKDOWN_KEY = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown';
+// The Sidebar opener is set once in apply(); MarkdownBody is a slot component
+// and cannot receive this service through the slot's fixed owner props.
+let openResource;
 
 function darkMode() { return document.body.hasAttribute('data-ds-dark-theme') || document.documentElement.dataset.theme === 'dark'; }
 
@@ -24,17 +27,11 @@ export function MarkdownBody({ content, resourceAddress, useResource }) {
   }, []);
   useEffect(() => {
     if (!root.current || source || content.kind !== 'text') return;
-    // P0 perf: the render only reads content.text, so content.eof must not be a
-    // dependency — flipping eof at the end of a paginated read used to force one
-    // more complete document render (and a full Mermaid re-render). Scheduling
-    // through requestAnimationFrame also coalesces bursts of text updates (page
-    // appends, auto-refresh reloads) into a single render per frame instead of
-    // one full rebuild per store notification.
     root.current.dataset.state = 'rendering';
     let view = null;
     const frame = requestAnimationFrame(() => {
       if (!root.current || source) return;
-      view = mountMarkdown(root.current, content.text, { documentPath: absolutePath, dark });
+      view = mountMarkdown(root.current, content.text, { documentPath: absolutePath, dark, openFile: openResource, resourceAddress });
     });
     return () => {
       cancelAnimationFrame(frame);
@@ -51,6 +48,8 @@ export function MarkdownBody({ content, resourceAddress, useResource }) {
 }
 
 export function apply(ctx) {
+  const sidebar = ctx.get?.('sidebarRight');
+  openResource = sidebar?.openResource?.bind(sidebar);
   ctx.effect(() => {
     const tag = document.createElement('style');
     tag.dataset.plugin = name; tag.textContent = `${css}\n${katexCss}\n${highlightCss}`;
