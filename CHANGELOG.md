@@ -2,6 +2,14 @@
 
 本项目所有显著变更都记录在此文件中。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循语义化版本。
 
+## [1.3.6] - 2026-11-16
+
+### 搜索优化（Markdown 渲染优先）
+
+- package.json 描述前置 "Markdown renderer for DeepSeek Harness"，关键词首位改为 `markdown`，新增 `markdown-renderer` / `markdown-preview` / `markdown-editor` / `mdx`。
+- README 标题与首段以 Markdown 渲染为第一卖点，搜索场景表新增"Markdown 渲染/预览/图表/公式"行。
+- GitHub topics 用 `markdown-renderer` + `markdown-preview` 替换低价值标签。
+
 ## [1.3.5] - 2026-11-16
 
 ### 修复与改进
