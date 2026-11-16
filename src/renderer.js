@@ -1,4 +1,4 @@
-﻿import MarkdownIt from 'markdown-it';
+import MarkdownIt from 'markdown-it';
 import footnote from 'markdown-it-footnote';
 import taskLists from 'markdown-it-task-lists';
 import DOMPurify from 'dompurify';
@@ -36,7 +36,7 @@ function nextIdle() {
     else setTimeout(resolve, 0);
   });
 }
-export const diagnostics = { version: '1.3.3', active: false, documents: 0, diagrams: 0, repaired: 0, widgets: 0, errors: 0 };
+export const diagnostics = { version: '1.3.5', active: false, documents: 0, diagrams: 0, repaired: 0, widgets: 0, errors: 0 };
 
 function mathPlugin(md) {
   md.inline.ruler.before('escape', 'studio_math', (state, silent) => {
@@ -140,9 +140,63 @@ function button(label, action, signal) {
   const el = document.createElement('button'); el.type = 'button'; el.textContent = label;
   el.addEventListener('click', action, { signal }); return el;
 }
+function svgCanvasWidth(svg) {
+  const storedWidth = Number(svg.dataset.mdsCanvasWidth);
+  if (Number.isFinite(storedWidth) && storedWidth > 0) return storedWidth;
+  const viewBox = (svg.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+  if (viewBox.length === 4 && viewBox.every(Number.isFinite) && viewBox[2] > 0) return viewBox[2];
+  const width = (svg.getAttribute('width') || '').trim();
+  const match = /^(\d+(?:\.\d+)?)(?:px)?$/i.exec(width);
+  return match ? Number(match[1]) : null;
+}
+function prepareSvg(svg) {
+  const width = svgCanvasWidth(svg);
+  if (width) svg.dataset.mdsCanvasWidth = String(width);
+  if (!svg.getAttribute('role')) svg.setAttribute('role', 'img');
+  if (!svg.getAttribute('aria-label')) {
+    const title = svg.querySelector('title')?.textContent?.trim();
+    if (title) svg.setAttribute('aria-label', title);
+  }
+  svg.removeAttribute('width'); svg.removeAttribute('height');
+  svg.style.width = width ? `${width}px` : '100%';
+  svg.style.height = 'auto'; svg.style.maxWidth = 'none'; svg.style.maxHeight = 'none';
+  svg.style.display = 'block'; svg.style.verticalAlign = 'top';
+  
+  // 确保容器高度自适应 SVG 内容
+  const body = svg.closest('.mds-widget-body, .mds-diagram-pane');
+  if (body) {
+    body.style.minHeight = 'min-content';
+    body.style.height = 'auto';
+    body.style.maxHeight = 'none';
+  }
+}
+function setSvgFit(svg, control, fit) {
+  const width = svgCanvasWidth(svg);
+  if (fit) svg.dataset.mdsFitWidth = 'true';
+  else delete svg.dataset.mdsFitWidth;
+  svg.style.width = fit || !width ? '100%' : `${width}px`;
+  svg.style.maxWidth = fit ? '100%' : 'none';
+  control.textContent = fit ? '原始尺寸' : '适应宽度';
+  control.setAttribute('aria-pressed', String(fit));
+}
+function addWidgetControls(bar, svg, signal) {
+  const controls = document.createElement('div'); controls.className = 'mds-widget-controls';
+  const fit = button('适应宽度', () => setSvgFit(svg, fit, svg.dataset.mdsFitWidth !== 'true'), signal);
+  fit.setAttribute('aria-pressed', 'false');
+  controls.append(fit, button('全屏', () => openFullscreen(svg, signal), signal), button('下载 SVG', () => saveSvg(svg), signal));
+  bar.append(controls);
+  return controls;
+}
 function saveSvg(svg) {
   const copy = svg.cloneNode(true);
+  const width = svgCanvasWidth(copy);
+  const viewBox = (copy.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
   copy.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  if (width) copy.setAttribute('width', String(width));
+  if (viewBox.length === 4 && viewBox.every(Number.isFinite) && viewBox[3] > 0) copy.setAttribute('height', String(viewBox[3]));
+  copy.style.removeProperty('width'); copy.style.removeProperty('height');
+  copy.style.removeProperty('max-width'); copy.style.removeProperty('max-height');
+  delete copy.dataset.mdsCanvasWidth; delete copy.dataset.mdsFitWidth;
   const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copy)], { type: 'image/svg+xml;charset=utf-8' }));
   const a = document.createElement('a'); a.href = url; a.download = 'diagram.svg'; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -153,16 +207,25 @@ function openFullscreen(svg, ownerSignal) {
   const toolbar = document.createElement('div'); toolbar.className = 'mds-toolbar';
   const viewport = document.createElement('div'); viewport.className = 'mds-viewport';
   const stage = document.createElement('div'); stage.className = 'mds-stage';
-  stage.append(svg.cloneNode(true)); viewport.append(stage);
+  const copy = svg.cloneNode(true); prepareSvg(copy); stage.append(copy); viewport.append(stage);
   let scale = 1, x = 0, y = 0, drag;
   const transform = () => stage.style.transform = `translate(${x}px,${y}px) scale(${scale})`;
-  const fit = () => { scale = 1; x = y = 0; transform(); };
+  const fit = () => {
+    stage.style.transform = 'none';
+    const box = copy.getBoundingClientRect();
+    const maxWidth = Math.max(1, viewport.clientWidth - 48);
+    const maxHeight = Math.max(1, viewport.clientHeight - 48);
+    scale = Math.min(1, maxWidth / Math.max(1, box.width), maxHeight / Math.max(1, box.height));
+    x = y = 0; transform();
+  };
   const close = () => { ctrl.abort(); dialog.remove(); ownerSignal.removeEventListener('abort', close); };
   toolbar.append(button('适应', fit, ctrl.signal), button('放大', () => { scale = Math.min(8, scale * 1.25); transform(); }, ctrl.signal), button('缩小', () => { scale = Math.max(.2, scale / 1.25); transform(); }, ctrl.signal), button('下载 SVG', () => saveSvg(svg), ctrl.signal), button('关闭', close, ctrl.signal));
   dialog.append(toolbar, viewport); document.body.append(dialog); dialog.showModal();
+  requestAnimationFrame(fit);
   dialog.addEventListener('cancel', close, { signal: ctrl.signal });
   ownerSignal.addEventListener('abort', close, { once: true });
-  viewport.addEventListener('pointerdown', e => { drag = { x: e.clientX - x, y: e.clientY - y }; viewport.setPointerCapture(e.pointerId); }, { signal: ctrl.signal });
+  window.addEventListener('resize', fit, { signal: ctrl.signal });
+  viewport.addEventListener('pointerdown', e => { if (e.button !== 0) return; drag = { x: e.clientX - x, y: e.clientY - y }; viewport.setPointerCapture(e.pointerId); }, { signal: ctrl.signal });
   viewport.addEventListener('pointermove', e => { if (drag) { x = e.clientX - drag.x; y = e.clientY - drag.y; transform(); } }, { signal: ctrl.signal });
   viewport.addEventListener('pointerup', () => { drag = null; }, { signal: ctrl.signal });
   viewport.addEventListener('wheel', e => { e.preventDefault(); scale = Math.max(.2, Math.min(8, scale * (e.deltaY < 0 ? 1.1 : 1 / 1.1))); transform(); }, { passive: false, signal: ctrl.signal });
@@ -194,10 +257,10 @@ const THEME_LIGHT = {
   fontFamily: 'system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif',
   fontSize: '14px',
   textColor: '#1F2937', titleColor: '#111827', classText: '#1F2937',
-  primaryColor: '#3B82F6', primaryTextColor: '#FFFFFF', primaryBorderColor: '#1D4ED8',
-  secondaryColor: '#8B5CF6', secondaryTextColor: '#FFFFFF', secondaryBorderColor: '#7C3AED',
-  tertiaryColor: '#F59E0B', tertiaryTextColor: '#FFFFFF', tertiaryBorderColor: '#D97706',
-  mainBkg: '#3B82F6', nodeBorder: '#1D4ED8', nodeTextColor: '#FFFFFF',
+  primaryColor: '#B5D4F4', primaryTextColor: '#0C447C', primaryBorderColor: '#85B7EB',
+  secondaryColor: '#CECBF6', secondaryTextColor: '#3C3489', secondaryBorderColor: '#AFA9EC',
+  tertiaryColor: '#FAC775', tertiaryTextColor: '#633806', tertiaryBorderColor: '#EF9F27',
+  mainBkg: '#B5D4F4', nodeBorder: '#85B7EB', nodeTextColor: '#0C447C',
   lineColor: '#94A3B8',
   clusterBkg: 'rgba(59,130,246,.07)', clusterBorder: 'rgba(59,130,246,.35)',
   edgeLabelBackground: '#F3F4F6',
@@ -222,10 +285,10 @@ const THEME_DARK = {
   fontFamily: 'system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif',
   fontSize: '14px',
   textColor: '#E5E7EB', titleColor: '#F9FAFB', classText: '#E5E7EB',
-  primaryColor: '#2563EB', primaryTextColor: '#FFFFFF', primaryBorderColor: '#60A5FA',
-  secondaryColor: '#7C3AED', secondaryTextColor: '#FFFFFF', secondaryBorderColor: '#A78BFA',
-  tertiaryColor: '#D97706', tertiaryTextColor: '#FFFFFF', tertiaryBorderColor: '#FBBF24',
-  mainBkg: '#2563EB', nodeBorder: '#60A5FA', nodeTextColor: '#FFFFFF',
+  primaryColor: '#1F3B5B', primaryTextColor: '#DBEAFE', primaryBorderColor: '#85B7EB',
+  secondaryColor: '#302C5A', secondaryTextColor: '#E6E4FF', secondaryBorderColor: '#AFA9EC',
+  tertiaryColor: '#5A3B12', tertiaryTextColor: '#FEF0C7', tertiaryBorderColor: '#EF9F27',
+  mainBkg: '#1F3B5B', nodeBorder: '#85B7EB', nodeTextColor: '#DBEAFE',
   lineColor: '#64748B',
   clusterBkg: 'rgba(148,163,184,.08)', clusterBorder: 'rgba(148,163,184,.30)',
   edgeLabelBackground: '#111827',
@@ -245,7 +308,11 @@ const THEME_DARK = {
   git0: VIVID[0], git1: VIVID[1], git2: VIVID[2], git3: VIVID[3], git4: VIVID[4], git5: VIVID[5], git6: VIVID[6], git7: VIVID[7],
   cScale0: VIVID[0], cScale1: VIVID[1], cScale2: VIVID[2], cScale3: VIVID[3], cScale4: VIVID[4], cScale5: VIVID[5], cScale6: VIVID[6], cScale7: VIVID[7], cScale8: VIVID[8], cScale9: VIVID[9], cScale10: VIVID[10], cScale11: VIVID[11],
 };
-function diagramCard(pre, dark, signal) {
+function diagramCard(pre, dark, ownerSignal) {
+  const controller = new AbortController();
+  const { signal } = controller;
+  ownerSignal.addEventListener('abort', () => controller.abort(), { once: true, signal });
+  if (ownerSignal.aborted) controller.abort();
   const source = pre.textContent;
   const card = document.createElement('section'); card.className = 'mds-diagram'; card.dataset.state = 'loading';
   const toolbar = document.createElement('div'); toolbar.className = 'mds-toolbar';
@@ -256,10 +323,12 @@ function diagramCard(pre, dark, signal) {
   const graph = button('图形', () => { pane.hidden = false; pre.hidden = true; graph.setAttribute('aria-pressed', 'true'); code.setAttribute('aria-pressed', 'false'); }, signal);
   const code = button('源码', () => { pane.hidden = true; pre.hidden = false; graph.setAttribute('aria-pressed', 'false'); code.setAttribute('aria-pressed', 'true'); }, signal);
   graph.setAttribute('aria-pressed', 'true'); code.setAttribute('aria-pressed', 'false');
+  const fit = button('适应宽度', () => { const svg = pane.querySelector('svg'); if (svg) setSvgFit(svg, fit, svg.dataset.mdsFitWidth !== 'true'); }, signal);
+  fit.setAttribute('aria-pressed', 'false');
   const full = button('全屏', () => { const svg = pane.querySelector('svg'); if (svg) openFullscreen(svg, signal); }, signal);
   const download = button('下载 SVG', () => { const svg = pane.querySelector('svg'); if (svg) saveSvg(svg); }, signal);
-  full.disabled = download.disabled = true;
-  toolbar.append(label, graph, code, full, download);
+  full.disabled = download.disabled = fit.disabled = true;
+  toolbar.append(label, graph, code, fit, full, download);
   queue = queue.catch(() => {}).then(async () => {
     await nextIdle();
     if (signal.aborted || !card.isConnected) return;
@@ -275,6 +344,7 @@ function diagramCard(pre, dark, signal) {
         const cachedEl = pane.querySelector('svg');
         if (!cachedEl) throw new Error('图表引擎没有返回 SVG。');
         cachedEl.setAttribute('role', 'img'); cachedEl.setAttribute('aria-label', 'Mermaid 图表');
+        prepareSvg(cachedEl);
         return;
       }
       mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', suppressErrorRendering: true, theme: 'base', themeVariables: dark ? THEME_DARK : THEME_LIGHT, htmlLabels: false, flowchart: { htmlLabels: false, curve: 'basis', nodeSpacing: 45, rankSpacing: 55 }, maxTextSize: MAX_DIAGRAM, maxEdges: 2000 });
@@ -284,12 +354,13 @@ function diagramCard(pre, dark, signal) {
       const el = pane.querySelector('svg');
       if (!el) throw new Error('图表引擎没有返回 SVG。');
       el.setAttribute('role', 'img'); el.setAttribute('aria-label', 'Mermaid 图表');
+      prepareSvg(el);
       if (src.length <= 15_000 && svg.length <= 80_000) remember(SVG_CACHE, cacheKey, svg, SVG_CACHE_MAX);
     };
     try {
       await draw(source);
       if (signal.aborted || !card.isConnected) return;
-      card.dataset.state = 'ok'; full.disabled = download.disabled = false; diagnostics.diagrams++;
+      card.dataset.state = 'ok'; full.disabled = download.disabled = fit.disabled = false; diagnostics.diagrams++;
     } catch (first) {
       if (signal.aborted) return;
       // Retry once with the conservative repair before surfacing an error.
@@ -299,7 +370,7 @@ function diagramCard(pre, dark, signal) {
           await draw(fixed);
           if (signal.aborted || !card.isConnected) return;
           label.textContent = 'Mermaid · 已自动修复';
-          card.dataset.state = 'ok'; full.disabled = download.disabled = false; diagnostics.diagrams++; diagnostics.repaired++;
+          card.dataset.state = 'ok'; full.disabled = download.disabled = fit.disabled = false; diagnostics.diagrams++; diagnostics.repaired++;
           return;
         } catch { /* fall through to the error state with both attempts failed */ }
       }
@@ -309,7 +380,7 @@ function diagramCard(pre, dark, signal) {
       pane.hidden = true; pre.hidden = false; diagnostics.errors++;
     }
   });
-  return queue;
+  return { card, done: queue, dispose: () => controller.abort() };
 }
 export function mountMarkdown(root, text, { documentPath, dark = false } = {}) {
   const controller = new AbortController(); const { signal } = controller;
@@ -332,19 +403,23 @@ export function mountMarkdown(root, text, { documentPath, dark = false } = {}) {
     if (href.startsWith('#')) a.addEventListener('click', e => { e.preventDefault(); let id; try { id = decodeURIComponent(href.slice(1)); } catch { return; } [...root.querySelectorAll('[id]')].find(n => n.id === id)?.scrollIntoView({ block: 'start' }); }, { signal });
     else { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
   });
-  const jobs = [...root.querySelectorAll('pre.mds-diagram-source')].map(pre => diagramCard(pre, dark, signal));
+  const jobs = [...root.querySelectorAll('pre.mds-diagram-source')].map(pre => diagramCard(pre, dark, signal).done);
   // Hydrate mds-diagram widget placeholders: swap escaped SVG source for the
   // sanitized, themed widget body. SVG <style> survives via the svg profile.
   root.querySelectorAll('pre.mds-widget-src').forEach(pre => {
     const holder = pre.closest('.mds-widget');
     if (!holder) return;
     const title = holder.querySelector('.mds-widget-title')?.textContent || '';
+    const bar = holder.querySelector('.mds-widget-title');
+    const label = document.createElement('span'); label.className = 'mds-widget-label'; label.textContent = title;
+    bar.replaceChildren(label);
     const clean = DOMPurify.sanitize(pre.textContent, { USE_PROFILES: { svg: true, svgFilters: true }, FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'foreignObject'] });
     if (!/<svg[\s>]/i.test(clean)) return;
     const body = document.createElement('div'); body.className = 'mds-widget-body'; body.innerHTML = clean;
     const svg = body.querySelector('svg');
-    if (svg) { svg.removeAttribute('width'); svg.removeAttribute('height'); svg.style.width = '100%'; svg.style.height = 'auto'; }
+    if (svg) prepareSvg(svg);
     pre.replaceWith(body);
+    if (svg && bar) addWidgetControls(bar, svg, signal);
     if (title) diagnostics.widgets++;
   });
   diagnostics.documents++;
@@ -394,6 +469,9 @@ function disposeChat(code) {
   const entry = chatEntries.get(code);
   if (!entry) return;
   if (entry.timer) clearTimeout(entry.timer);
+  entry.disposeDiagram?.();
+  entry.removeWidgetAbort?.();
+  entry.widgetController?.abort();
   // Put the original pre back before removing the wrapper, so React-owned
   // DOM stays where the framework placed it.
   if (entry.wrapper && entry.wrapper.isConnected) {
@@ -415,8 +493,17 @@ function widgetCardFromCode(code, dark) {
   const bar = document.createElement('div'); bar.className = 'mds-widget-title'; bar.textContent = title || '图表';
   const body = document.createElement('div'); body.className = 'mds-widget-body'; body.innerHTML = clean;
   const svg = body.querySelector('svg');
-  if (svg) { svg.removeAttribute('width'); svg.removeAttribute('height'); svg.style.width = '100%'; svg.style.height = 'auto'; }
+  if (svg) prepareSvg(svg);
   pre.before(card); pre.hidden = true; card.append(bar, body, pre);
+  const entry = chatEntries.get(code);
+  if (svg && entry) {
+    entry.widgetController = new AbortController();
+    const ownerSignal = chatSignal.signal;
+    const abortWidget = () => entry.widgetController?.abort();
+    ownerSignal.addEventListener('abort', abortWidget, { once: true });
+    entry.removeWidgetAbort = () => ownerSignal.removeEventListener('abort', abortWidget);
+    addWidgetControls(bar, svg, entry.widgetController.signal);
+  }
   diagnostics.widgets++;
   return card;
 }
@@ -436,7 +523,10 @@ export function watchMermaid(target, { getDark = () => false } = {}) {
       const source = (code.textContent || '').trim();
       if (isSvgSource(source)) { entry.wrapper = widgetCardFromCode(code, getDark()); if (entry.wrapper) return; }
       if (!isMermaidCodeBlock(code)) { disposeChat(code); return; }
-      entry.wrapper = diagramCard(pre, getDark(), chatSignal.signal);
+      const diagram = diagramCard(pre, getDark(), chatSignal.signal);
+      entry.wrapper = diagram.card;
+      entry.renderPromise = diagram.done;
+      entry.disposeDiagram = diagram.dispose;
     }, CHAT_STABLE_MS);
     chatEntries.set(code, entry);
   };
@@ -452,9 +542,10 @@ export function watchMermaid(target, { getDark = () => false } = {}) {
         }
         for (const n of m.removedNodes) {
           if (n.nodeType !== Node.ELEMENT_NODE) continue;
-          n.querySelectorAll?.('.mds-diagram').forEach((card) => {
+          n.querySelectorAll?.('.mds-diagram, .mds-widget').forEach(card => {
             const pre = card.querySelector(':scope > pre');
-            if (pre) { const c = pre.querySelector(':scope > code'); if (c) chatEntries.delete(c); }
+            const code = pre?.querySelector(':scope > code');
+            if (code && !code.isConnected) disposeChat(code);
           });
         }
       } else if (m.type === 'characterData') {
@@ -465,7 +556,7 @@ export function watchMermaid(target, { getDark = () => false } = {}) {
     }
     // GC entries whose card left the DOM (message unmounted / list virtualization)
     for (const [code, entry] of chatEntries) {
-      if (entry.wrapper && !entry.wrapper.isConnected) chatEntries.delete(code);
+      if (entry.wrapper && !entry.wrapper.isConnected) disposeChat(code);
     }
     for (const code of seen) {
       if (!code.isConnected) continue;
@@ -481,6 +572,9 @@ export function watchMermaid(target, { getDark = () => false } = {}) {
     }
   });
   observer.observe(target, { childList: true, subtree: true, characterData: true });
+  target.querySelectorAll('pre > code').forEach(code => {
+    if (isMermaidCodeBlock(code) || isSvgSource(code.textContent)) schedule(code);
+  });
   const rebuildAll = () => {
     for (const code of [...chatEntries.keys()]) {
       const entry = chatEntries.get(code);

@@ -20,6 +20,13 @@ const registration = await page.evaluate(() => {
   const mod = window.__registration.factory(spec => { if (spec === 'react') return window.__testReact; throw new Error('Undeclared module '+spec); });
   window.__effects = [];
   window.__slot = null;
+  window.__chat = document.createElement('div');
+  window.__chat.id = 'initial-chat';
+  window.__chat.style.width = '420px';
+  const preexisting = document.createElement('div');
+  preexisting.innerHTML = '<pre><code>flowchart LR\n A[挂载前已存在] --> B[也会被渲染]</code></pre>';
+  window.__chat.appendChild(preexisting);
+  document.body.appendChild(window.__chat);
   const ctx = { effect(fn) { const d = fn(); if (typeof d === 'function') window.__effects.push(d); return d; }, slots: {
     inject(name, fn) { if (name !== 'sidebar.right.tab.document') throw new Error('Wrong slot '+name); const d = fn(); window.__effects.push(d); return d; },
     register(options, component) { window.__slot = {options,component}; return () => { window.__slot = null; }; }
@@ -45,18 +52,18 @@ const rendersBeforeEofFlip = await page.evaluate(() => window.__dshMdStudio.docu
 await page.evaluate(text => window.__render(text, true), sample);
 await page.waitForTimeout(500);
 assert.equal(await page.evaluate(() => window.__dshMdStudio.documents), rendersBeforeEofFlip, 'eof flip must not rebuild the document');
-assert.equal(await page.locator('.mds-diagram[data-state="ok"] svg').count(), 5);
-assert.ok((await page.locator('.mds-diagram').first().locator('svg').textContent()).includes('打开文件'), 'flowchart SVG must retain visible node labels');
-assert.equal(await page.locator('.mds-badge', { hasText: '已自动修复' }).count(), 1, 'parenthesised node label must be auto-repaired');
+assert.equal(await page.locator('[data-mds-root] .mds-diagram[data-state="ok"] svg').count(), 5);
+assert.ok((await page.locator('[data-mds-root] .mds-diagram').first().locator('svg').textContent()).includes('打开文件'), 'flowchart SVG must retain visible node labels');
+assert.equal(await page.locator('[data-mds-root] .mds-badge', { hasText: '已自动修复' }).count(), 1, 'parenthesised node label must be auto-repaired');
 // Mermaid renders long labels as positioned tspans; concatenated text may drop
 // inter-word spaces, so compare whitespace-insensitively.
-assert.ok((await page.locator('.mds-diagram[data-state="ok"] svg').last().textContent()).replace(/\s+/g, '').includes('OpenCode(ACP)'), 'repaired label must keep its text');
-assert.equal(await page.locator('.mds-document table').count(), 1);
-assert.equal(await page.locator('.mds-document input[type="checkbox"]').count(), 2);
-assert.equal(await page.locator('.mds-document .footnotes').count(), 1);
-assert.equal(await page.locator('.mds-document .katex').count(), 2);
-assert.ok(await page.locator('.mds-document .hljs-keyword').count());
-const first = page.locator('.mds-diagram').first();
+assert.ok((await page.locator('[data-mds-root] .mds-diagram[data-state="ok"] svg').last().textContent()).replace(/\s+/g, '').includes('OpenCode(ACP)'), 'repaired label must keep its text');
+assert.equal(await page.locator('[data-mds-root] table').count(), 1);
+assert.equal(await page.locator('[data-mds-root] input[type="checkbox"]').count(), 2);
+assert.equal(await page.locator('[data-mds-root] .footnotes').count(), 1);
+assert.equal(await page.locator('[data-mds-root] .katex').count(), 2);
+assert.ok(await page.locator('[data-mds-root] .hljs-keyword').count());
+const first = page.locator('[data-mds-root] .mds-diagram').first();
 await first.getByRole('button', {name:'源码',exact:true}).click();
 assert.equal(await first.locator('pre').isVisible(), true);
 await first.getByRole('button', {name:'图形',exact:true}).click();
@@ -70,6 +77,9 @@ const download = await downloadPromise;
 assert.equal(download.suggestedFilename(), 'diagram.svg');
 await mkdir(resolve(root, 'test/artifacts'), {recursive:true});
 await download.saveAs(resolve(root, 'test/artifacts/diagram.svg'));
+const exportedSvg = await readFile(resolve(root, 'test/artifacts/diagram.svg'), 'utf8');
+assert.match(exportedSvg, /<svg[^>]+width="\d+(?:\.\d+)?"/, 'downloaded SVG should carry a standalone intrinsic width');
+assert.doesNotMatch(exportedSvg, /data-mds-(?:canvas-width|fit-width)/, 'download must not contain renderer-only sizing metadata');
 await page.screenshot({path:resolve(root,'test/artifacts/native-preview-light.png'),fullPage:true});
 await page.evaluate(() => {
   document.body.style.background = '#17191d';
@@ -86,20 +96,20 @@ await page.waitForSelector('.mds-document[data-state="ready"]');
 // Regression: invalid diagrams retain source and an error, while other blocks still render.
 await page.evaluate(text => window.__render(text), sample + '\n```mermaid\nnot-a-valid-diagram\n```\n<script>window.__injected=true</script><img src="x" onerror="window.__injected=true">');
 await page.waitForSelector('.mds-document[data-state="partial"]');
-assert.equal(await page.locator('.mds-diagram[data-state="error"]').count(), 1);
-assert.equal(await page.locator('.mds-diagram[data-state="ok"]').count(), 5);
+assert.equal(await page.locator('[data-mds-root] .mds-diagram[data-state="error"]').count(), 1);
+assert.equal(await page.locator('[data-mds-root] .mds-diagram[data-state="ok"]').count(), 5);
 assert.equal(await page.evaluate(() => !!window.__injected), false);
 // Regression: rapid file changes never display a stale diagram result.
 await page.evaluate(() => { window.__render('# Replacement\n\nOnly this new file.'); });
 await page.waitForSelector('.mds-document[data-state="ready"]');
-assert.equal(await page.locator('.mds-diagram').count(), 0);
+assert.equal(await page.locator('[data-mds-root] .mds-diagram').count(), 0);
 assert.ok((await page.locator('.mds-document').textContent()).includes('Replacement'));
 // Render the actual file the user opens in the right sidebar, not only the synthetic fixture.
 const userDemo = await readFile(resolve(root, '../dsh-md-studio-demo.md'), 'utf8');
 await page.evaluate(text => window.__render(text), userDemo);
 await page.waitForSelector('.mds-document[data-state="ready"]', { timeout: 60000 });
-assert.equal(await page.locator('.mds-diagram[data-state="ok"] svg').count(), 4, 'actual demo must render all four diagrams');
-assert.ok((await page.locator('.mds-diagram').first().locator('svg').textContent()).includes('打开 Markdown 文件'));
+assert.equal(await page.locator('[data-mds-root] .mds-diagram[data-state="ok"] svg').count(), 4, 'actual demo must render all four diagrams');
+assert.ok((await page.locator('[data-mds-root] .mds-diagram').first().locator('svg').textContent()).includes('打开 Markdown 文件'));
 await page.screenshot({ path: resolve(root, 'test/artifacts/user-demo-dark.png'), fullPage: true });
 // TODO(v1.3.1): add mds-diagram widget test — the fence + hydration pipeline works
 // (verified via build + manual test) but the test harness needs a proper React
@@ -108,6 +118,11 @@ await page.screenshot({ path: resolve(root, 'test/artifacts/user-demo-dark.png')
 // --- v1.2: conversation-side (chat) Mermaid rendering ---
 // Simulate the official chat DOM: plain pre>code without a language class,
 // placed OUTSIDE the document-preview root, like chat messages are.
+await page.waitForSelector('#initial-chat .mds-diagram[data-state="ok"] svg', { timeout: 60000 });
+assert.ok((await page.locator('#initial-chat .mds-diagram svg').textContent()).replace(/\s+/g, '').includes('挂载前已存在'), 'existing chat diagrams should render when the watcher mounts');
+const initialChatCards = await page.locator('#initial-chat .mds-diagram').count();
+assert.equal(initialChatCards, 1);
+await page.evaluate(() => window.__chat.remove());
 await page.evaluate(() => {
   window.__chat = document.createElement('div');
   window.__chat.id = 'chat-simulator';
@@ -119,7 +134,7 @@ await page.evaluate(() => {
   window.__chat.appendChild(wrap);
 });
 await page.waitForSelector('#chat-simulator .mds-diagram[data-state="ok"] svg', { timeout: 60000 });
-assert.ok((await page.locator('#chat-simulator svg').textContent()).replace(/\s+/g, '').includes('聊天图表'), 'chat diagram must render with its labels');
+assert.ok((await page.locator('#chat-simulator .mds-diagram svg').textContent()).replace(/\s+/g, '').includes('聊天图表'), 'chat diagram must render with its labels');
 // No double-rendering: the document-preview root must keep exactly its own 4 cards.
 assert.equal(await page.locator('[data-mds-root] .mds-diagram').count(), 4, 'document preview must not be re-carded by the chat watcher');
 // Streaming: text settles after rapid updates -> exactly one card with the final content.
@@ -136,18 +151,18 @@ await page.waitForFunction(() => {
   const cards = document.querySelectorAll('#chat-simulator .mds-diagram');
   return cards.length === 2 && [...cards].every(c => c.dataset.state === 'ok');
 }, { timeout: 60000 });
-assert.ok((await page.locator('#chat-simulator svg').last().textContent()).replace(/\s+/g, '').includes('稳定输出'), 'streamed chat diagram must show final content');
+assert.ok((await page.locator('#chat-simulator .mds-diagram svg').last().textContent()).replace(/\s+/g, '').includes('稳定输出'), 'streamed chat diagram must show final content');
 assert.equal(await page.locator('#chat-simulator .mds-diagram').count(), 2, 'streaming must produce exactly one card per block');
 // v1.3.2 regression: a bare SVG block (NO fence language) must render as a widget card.
 await page.evaluate(() => {
   const wrap = document.createElement('div');
   wrap.innerHTML = '<pre><code>' +
-    '&lt;svg viewBox="0 0 300 80" width="100%" font-family="system-ui,sans-serif"&gt;\n' +
+    '&lt;svg viewBox="0 0 1400 80" width="100%" font-family="system-ui,sans-serif"&gt;\n' +
     '  &lt;title&gt;架构总览&lt;/title&gt;\n' +
     '  &lt;rect x="10" y="20" rx="8" width="120" height="40" fill="#3B82F6"/&gt;\n' +
     '  &lt;text x="70" y="46" text-anchor="middle" fill="#fff" font-size="13"&gt;前端&lt;/text&gt;\n' +
-    '  &lt;rect x="170" y="20" rx="8" width="120" height="40" fill="#8B5CF6"/&gt;\n' +
-    '  &lt;text x="230" y="46" text-anchor="middle" fill="#fff" font-size="13"&gt;后端&lt;/text&gt;\n' +
+    '  &lt;rect x="1270" y="20" rx="8" width="120" height="40" fill="#8B5CF6"/&gt;\n' +
+    '  &lt;text x="1330" y="46" text-anchor="middle" fill="#fff" font-size="13"&gt;后端&lt;/text&gt;\n' +
     '&lt;/svg&gt;' +
     '</code></pre>';
   window.__chat.appendChild(wrap);
@@ -155,6 +170,22 @@ await page.evaluate(() => {
 await page.waitForSelector('#chat-simulator .mds-widget .mds-widget-body svg', { timeout: 60000 });
 assert.ok(await page.locator('#chat-simulator .mds-widget-title:has-text("架构总览")').count(), 'bare SVG block must become a widget card with its <title>');
 assert.equal(await page.locator('#chat-simulator .mds-widget script, #chat-simulator .mds-widget foreignObject').count(), 0, 'widget card must stay sanitized');
+const chatWidget = page.locator('#chat-simulator .mds-widget');
+const chatSvg = chatWidget.locator('svg');
+const naturalWidth = await chatSvg.evaluate(svg => svg.getBoundingClientRect().width);
+const chatPaneWidth = await chatWidget.locator('.mds-widget-body').evaluate(el => el.clientWidth);
+assert.ok(naturalWidth >= 1399, `wide SVG should retain its viewBox width, got ${naturalWidth}`);
+assert.ok(await chatWidget.locator('.mds-widget-body').evaluate(el => el.scrollWidth > el.clientWidth), 'wide SVG should scroll rather than shrink labels');
+const chatFit = chatWidget.getByRole('button', { name: '适应宽度' });
+await chatFit.click();
+assert.ok(await chatSvg.evaluate(svg => svg.getBoundingClientRect().width <= svg.closest('.mds-widget-body').clientWidth), 'fit control should scale the SVG to its pane');
+assert.equal(await chatWidget.locator('.mds-widget-controls button').first().getAttribute('aria-pressed'), 'true');
+await chatWidget.getByRole('button', { name: '原始尺寸' }).click();
+assert.ok((await chatSvg.evaluate(svg => svg.getBoundingClientRect().width)) >= 1399, 'fit toggle should restore native canvas width');
+await chatWidget.getByRole('button', { name: '全屏', exact: true }).click();
+assert.equal(await page.locator('dialog.mds-fullscreen').isVisible(), true, 'SVG widget fullscreen control should open a dialog');
+await page.locator('dialog.mds-fullscreen').getByRole('button', { name: '放大' }).click();
+await page.locator('dialog.mds-fullscreen').getByRole('button', { name: '关闭' }).click();
 // Non-diagram code blocks must remain untouched by the watcher.
 await page.evaluate(() => {
   const wrap = document.createElement('div');
@@ -166,10 +197,10 @@ assert.equal(await page.locator('#chat-simulator .mds-widget').count(), 1, 'plai
 assert.equal(await page.locator('#chat-simulator pre:not([hidden])').filter({ hasText: 'const x = 1' }).count(), 1, 'plain code block stays visible');
 // Theme flip: chat cards re-render and stay ok (light -> back to dark).
 await page.evaluate(() => document.body.removeAttribute('data-ds-dark-theme'));
-await page.waitForFunction(() => window.__dshMdStudio.diagrams >= 16);
-assert.equal(await page.locator('#chat-simulator .mds-diagram[data-state="ok"] svg').count(), 2);
+await page.waitForFunction(() => document.querySelectorAll('#chat-simulator .mds-diagram[data-state="ok"] svg').length === 2);
+assert.equal(await page.locator('#chat-simulator .mds-diagram').count(), 2);
 await page.evaluate(() => document.body.setAttribute('data-ds-dark-theme', ''));
-await page.waitForFunction(() => window.__dshMdStudio.diagrams >= 18);
+await page.waitForFunction(() => document.querySelectorAll('#chat-simulator .mds-diagram[data-state="ok"] svg').length === 2);
 // v1.3.2: document-side widget — explicit mds-diagram fence AND bare-svg fence both hydrate.
 await page.evaluate(text => window.__render(text), [
   '## 组件图',
