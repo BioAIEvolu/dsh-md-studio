@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 # 📄 Markdown Studio for DeepSeek Harness
 
@@ -8,11 +8,16 @@ The rendering engine ships with the plugin — **fully offline** · no document 
 
 [![CI](https://github.com/BioAIEvolu/dsh-md-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/BioAIEvolu/dsh-md-studio/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/dsh-md-studio)](https://www.npmjs.com/package/dsh-md-studio)
+[![npm downloads](https://img.shields.io/npm/dm/dsh-md-studio)](https://www.npmjs.com/package/dsh-md-studio)
+[![GitHub stars](https://img.shields.io/github/stars/BioAIEvolu/dsh-md-studio?style=social)](https://github.com/BioAIEvolu/dsh-md-studio/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/BioAIEvolu/dsh-md-studio?style=social)](https://github.com/BioAIEvolu/dsh-md-studio/network/members)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 [![GitHub release](https://img.shields.io/github/v/release/BioAIEvolu/dsh-md-studio)](https://github.com/BioAIEvolu/dsh-md-studio/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.2.0--rc.2-blue)](https://github.com/deepseek-ai/deepseek-harness)
 [![中文文档](https://img.shields.io/badge/docs-中文-green)](README.md)
+
+If this project helps you, please consider giving it a ⭐ **Star** to help others discover it!
 
 [The same Mermaid block: stock preview vs Markdown Studio](docs/images/before-after.png)
 
@@ -130,3 +135,15 @@ If this plugin saves you time, please star the repo. Issues and PRs welcome — 
 ## License
 
 [MIT](LICENSE) © BioAIEvolu
+
+
+---
+
+## 💖 Support the Project
+
+If this plugin helps you, you can support the project by:
+
+- ⭐ **[Starring this repo](https://github.com/BioAIEvolu/dsh-md-studio)** — help others discover it
+- 🍴 **[Forking](https://github.com/BioAIEvolu/dsh-md-studio/fork)** — contribute or customize your own version
+- 🐛 **[Opening an Issue](https://github.com/BioAIEvolu/dsh-md-studio/issues)** — report bugs or suggest features
+- 📢 **Sharing** — recommend it to others in DSH communities, forums, or social platforms

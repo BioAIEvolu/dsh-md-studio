@@ -10,11 +10,16 @@ DSH 最完整的 Markdown 渲染插件。接管右侧文件预览 + 对话消息
 
 [![CI](https://github.com/BioAIEvolu/dsh-md-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/BioAIEvolu/dsh-md-studio/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/dsh-md-studio)](https://www.npmjs.com/package/dsh-md-studio)
+[![npm downloads](https://img.shields.io/npm/dm/dsh-md-studio)](https://www.npmjs.com/package/dsh-md-studio)
+[![GitHub stars](https://img.shields.io/github/stars/BioAIEvolu/dsh-md-studio?style=social)](https://github.com/BioAIEvolu/dsh-md-studio/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/BioAIEvolu/dsh-md-studio?style=social)](https://github.com/BioAIEvolu/dsh-md-studio/network/members)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 [![GitHub release](https://img.shields.io/github/v/release/BioAIEvolu/dsh-md-studio)](https://github.com/BioAIEvolu/dsh-md-studio/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.2.0--rc.2-blue)](https://github.com/deepseek-ai/deepseek-harness)
 [![English](https://img.shields.io/badge/docs-English-green)](README.en.md)
+
+如果这个项目帮到了你，请考虑 ⭐ **Star** 支持一下，让更多人发现它！
 
 [同一份 Mermaid 代码块：官方预览 vs Markdown Studio](docs/images/before-after.png)
 
