@@ -1,10 +1,10 @@
 <div align="center">
 
-# 📄 Markdown Studio for DeepSeek Harness
+# 📄 Markdown Studio — DSH Markdown 渲染插件
 
-**DSH 插件：Markdown 渲染 · Mermaid 流程图 · SVG 架构图 · 数学公式 · 代码高亮 · 完全离线**
+**DeepSeek Harness 的 Markdown 渲染器：GFM 表格 · 代码高亮 · Mermaid 流程图 · SVG 架构图 · KaTeX 公式 · 完全离线**
 
-在 DSH 原生右侧文件预览与对话消息中，把 Markdown 文档、Mermaid 图表、手写 SVG 架构图、KaTeX 数学公式、GFM 表格一次看全。
+DSH 最完整的 Markdown 渲染插件。接管右侧文件预览 + 对话消息双场景，把 Markdown 文档、Mermaid 图表、手写 SVG 架构图、数学公式、GFM 表格一次看全。
 
 渲染引擎随插件内置，**完全离线可用** · 无需改动你的文档 · 停用即恢复官方渲染器
 
@@ -26,10 +26,11 @@
 
 | 搜索场景 | Markdown Studio 提供 |
 |---|---|
-| **Markdown 预览增强** | 接管 DSH 右侧文件预览，GFM 表格/任务列表/脚注/代码高亮全支持 |
-| **Mermaid 流程图渲染** | 流程图、时序图、甘特图、饼图、类图等 Mermaid 11 全系图型就地渲染 |
+| **Markdown 渲染 / Markdown 预览** | DSH 最完整的 Markdown 渲染器：接管右侧文件预览 + 对话消息，GFM 表格/任务列表/脚注/删除线/代码高亮全支持 |
+| **Markdown 图表** | Markdown 里的 Mermaid 代码块就地渲染为彩色 SVG 图，不是源码 |
+| **Markdown 数学公式** | KaTeX 渲染行内 `$...$` 与块级 `$$...$$` 公式 |
+| **Mermaid 流程图渲染** | 流程图、时序图、甘特图、饼图、类图等 Mermaid 11 全系图型 |
 | **SVG 架构图 / 示意图** | 模型输出手写 SVG（`mds-diagram` 围栏或裸 `<svg>` 块）自动渲染为主题卡片 |
-| **数学公式** | KaTeX 渲染行内 `$...$` 与块级 `$$...$$` 公式 |
 | **对话内图表** | 聊天消息中的 Mermaid / SVG 代码块自动渲染，无需打开文档 |
 
 ## 为什么需要它
