@@ -2,6 +2,12 @@
 
 本项目所有显著变更都记录在此文件中。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循语义化版本。
 
+## [1.3.7] - 2026-11-17
+
+### 修复
+
+- 版本常量同步：v1.3.6 升号时遗漏 `src/client.js` 与 `src/renderer.js` 中的版本常量，导致 npm 包内 `data-md-studio` 显示 1.3.5。本次修复并建立一致性检查。
+
 ## [1.3.6] - 2026-11-16
 
 ### 搜索优化（Markdown 渲染优先）
