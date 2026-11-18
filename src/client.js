@@ -5,11 +5,12 @@ import katexCss from 'katex/dist/katex.min.css';
 import highlightCss from 'highlight.js/styles/github-dark.css';
 
 export const name = 'dsh-md-studio';
-export const inject = ['slots', 'sidebarRight'];
+// NOTE: do NOT declare 'sidebarRight' here. Third-party packages that declare it
+// can get stuck in the loader's waitingFor state (service never resolves outside
+// the built-in UI packages), which prevents the whole plugin from activating —
+// observed as chat Mermaid/SVG rendering silently dying in the real GUI (v1.3.6/1.3.7).
+export const inject = ['slots'];
 const MARKDOWN_KEY = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown';
-// The Sidebar opener is set once in apply(); MarkdownBody is a slot component
-// and cannot receive this service through the slot's fixed owner props.
-let openResource;
 
 function darkMode() { return document.body.hasAttribute('data-ds-dark-theme') || document.documentElement.dataset.theme === 'dark'; }
 
@@ -31,7 +32,7 @@ export function MarkdownBody({ content, resourceAddress, useResource }) {
     let view = null;
     const frame = requestAnimationFrame(() => {
       if (!root.current || source) return;
-      view = mountMarkdown(root.current, content.text, { documentPath: absolutePath, dark, openFile: openResource, resourceAddress });
+      view = mountMarkdown(root.current, content.text, { documentPath: absolutePath, dark, resourceAddress });
     });
     return () => {
       cancelAnimationFrame(frame);
@@ -39,7 +40,7 @@ export function MarkdownBody({ content, resourceAddress, useResource }) {
     };
   }, [content.kind, content.text, absolutePath, dark, source]);
   if (content.kind !== 'text') return React.createElement('p', null, '正在读取文档…');
-  return React.createElement('section', { className: 'mds-native', 'data-md-studio': '1.3.7' },
+  return React.createElement('section', { className: 'mds-native', 'data-md-studio': '1.3.8' },
     React.createElement('div', { className: 'mds-document-tools' },
       React.createElement('span', null, 'Markdown Studio'),
       React.createElement('button', { type: 'button', onClick: () => setSource(!source), 'aria-pressed': source }, source ? '阅读文档' : '查看源码')),
@@ -48,8 +49,6 @@ export function MarkdownBody({ content, resourceAddress, useResource }) {
 }
 
 export function apply(ctx) {
-  const sidebar = ctx.get?.('sidebarRight');
-  openResource = sidebar?.openResource?.bind(sidebar);
   ctx.effect(() => {
     const tag = document.createElement('style');
     tag.dataset.plugin = name; tag.textContent = `${css}\n${katexCss}\n${highlightCss}`;

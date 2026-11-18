@@ -36,7 +36,7 @@ function nextIdle() {
     else setTimeout(resolve, 0);
   });
 }
-export const diagnostics = { version: '1.3.7', active: false, documents: 0, diagrams: 0, repaired: 0, widgets: 0, errors: 0 };
+export const diagnostics = { version: '1.3.8', active: false, documents: 0, diagrams: 0, repaired: 0, widgets: 0, math: 0, errors: 0 };
 
 function mathPlugin(md) {
   md.inline.ruler.before('escape', 'studio_math', (state, silent) => {
@@ -470,8 +470,9 @@ export function mountMarkdown(root, text, { documentPath, dark = false, openFile
 }
 
 // -----------------------------------------------------------------------
-// 对话内 Mermaid 渲染：MutationObserver 监听聊天流，把官方 CodeBlock 里的
-// mermaid 围栏就地转成图表卡片。与右侧文档预览共用 diagramCard / repair /
+// 对话内 Mermaid / 数学公式渲染：MutationObserver 监听聊天流，把官方 CodeBlock 里的
+// mermaid 围栏就地转成图表卡片，把数学公式块就地转成 KaTeX 卡片（定界符识别与
+// 防误判启发式复刻 dsh-TUI）。与右侧文档预览共用 diagramCard / repair /
 // 队列，因此自动修复、主题适配行为一致。排除区（自身渲染产物、dsh-mermaid
 // 的产物）避免同一块被渲染两次。
 // -----------------------------------------------------------------------
@@ -502,11 +503,47 @@ const CHAT_STABLE_MS = 400;
 let chatSignal = null;
 
 function isInsideExcluded(el) {
-  return !!el.closest?.('.mds-diagram, [data-mds-root], .dsh-mmd, .dsh-mds-mmd, .mds-widget');
+  return !!el.closest?.('.mds-diagram, [data-mds-root], .dsh-mmd, .dsh-mds-mmd, .mds-widget, .mds-math');
 }
 /** Lenient widget match: a code block whose content is an inline SVG document,
  *  regardless of fence language (models often omit it). */
 const isSvgSource = (t) => /^\s*<svg[\s>]/i.test(String(t || ''));
+
+// ── Chat math detection ──────────────────────────────────────────────
+const MATH_LANG_RE = /^language-(?:math|latex|tex)$/i;
+/** Heuristics ported from dsh-TUI: avoid treating prices/shell vars/prose as math. */
+function looksLikeMath(text) {
+  const t = String(text || '').trim();
+  if (!t) return false;
+  // Block math: $$...$$, \[...\], \begin{align} etc.
+  if (/^\$\$[\s\S]*\$\$$/m.test(t)) return true;
+  if (/^\\\[[\s\S]*\\\]$/m.test(t)) return true;
+  if (/^\\begin\{(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath)\}/.test(t)) return true;
+  // Inline math: $...$ with non-space after opener, non-digit/non-space before closer
+  const m = /^\$([^$\n]+)\$$/.exec(t);
+  if (m) {
+    const body = m[1];
+    if (body.length < 1) return false;
+    // Reject pure numbers / ALL-CAPS / prices / shell vars
+    if (/^\d+$/.test(body)) return false;
+    if (/^[A-Z][A-Z0-9_]*$/.test(body)) return false;
+    if (/^\$[\d,.$]/.test(t)) return false; // price like $5, $10
+    if (/^\$\{/.test(t)) return false; // shell var ${PATH}
+    return true;
+  }
+  // \( ... \)
+  if (/^\\\([\s\S]*\\\)$/.test(t)) return true;
+  return false;
+}
+function isMathCodeBlock(code) {
+  const pre = code?.closest?.('pre');
+  if (!pre) return false;
+  const classes = Array.from(code.classList || []);
+  if (classes.some((n) => MATH_LANG_RE.test(n))) return true;
+  if (classes.some((n) => /^language-/i.test(n))) return false;
+  return looksLikeMath(code.textContent || '');
+}
+
 function disposeChat(code) {
   const entry = chatEntries.get(code);
   if (!entry) return;
@@ -549,6 +586,76 @@ function widgetCardFromCode(code, dark) {
   diagnostics.widgets++;
   return card;
 }
+
+/** Build a math formula card for chat-side code blocks. */
+function mathCardFromCode(code, dark) {
+  const pre = code.closest('pre');
+  if (!pre) return null;
+  const source = (code.textContent || '').trim();
+  const card = document.createElement('section');
+  card.className = 'mds-math';
+  card.dataset.state = 'ok';
+  const bar = document.createElement('div');
+  bar.className = 'mds-toolbar';
+  const label = document.createElement('span');
+  label.className = 'mds-badge';
+  label.textContent = '公式';
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.textContent = '源码';
+  toggle.setAttribute('aria-pressed', 'false');
+  const pane = document.createElement('div');
+  pane.className = 'mds-math-pane';
+  const errorPane = document.createElement('pre');
+  errorPane.className = 'mds-math-error';
+  errorPane.hidden = true;
+  errorPane.textContent = source;
+
+  // Try KaTeX render. On failure, degrade to raw TeX source (no red error markup).
+  let html = null;
+  let isBlock = /^\$\$|^\\\(|^\\\[|^\\begin/.test(source);
+  try {
+    let tex = source;
+    if (/^\$\$([\s\S]*)\$\$$/.test(tex)) tex = tex.replace(/^\$\$([\s\S]*)\$\$$/, '$1').trim();
+    else if (/^\\\(([\s\S]*)\\\)$/.test(tex)) tex = tex.replace(/^\\\(([\s\S]*)\\\)$/, '$1').trim();
+    else if (/^\\\[([\s\S]*)\\\]$/.test(tex)) tex = tex.replace(/^\\\[([\s\S]*)\\\]$/, '$1').trim();
+    else if (/^\$([^$\n]+)\$$/.test(tex)) tex = tex.replace(/^\$([^$\n]+)\$$/, '$1').trim();
+    html = katex.renderToString(tex, { displayMode: isBlock, throwOnError: true, trust: false, strict: 'warn', maxExpand: 1000 });
+  } catch { html = null; }
+
+  if (html) {
+    pane.innerHTML = html;
+    card.dataset.state = 'ok';
+  } else {
+    pane.hidden = true;
+    errorPane.hidden = false;
+    card.dataset.state = 'error';
+  }
+
+  toggle.addEventListener('click', () => {
+    const showing = toggle.getAttribute('aria-pressed') === 'true';
+    if (showing) {
+      pane.hidden = false;
+      errorPane.hidden = true;
+      toggle.textContent = '源码';
+      toggle.setAttribute('aria-pressed', 'false');
+    } else {
+      pane.hidden = true;
+      errorPane.hidden = false;
+      errorPane.textContent = source;
+      toggle.textContent = '公式';
+      toggle.setAttribute('aria-pressed', 'true');
+    }
+  });
+
+  bar.append(label, toggle);
+  pre.before(card);
+  card.append(bar, pane, errorPane, pre);
+  pre.hidden = true;
+  diagnostics.widgets++;
+  return card;
+}
+
 export function watchMermaid(target, { getDark = () => false } = {}) {
   if (typeof document === 'undefined' || !target) return { dispose() {}, rebuildAll() {} };
   if (!chatSignal || chatSignal.signal.aborted) chatSignal = new AbortController();
@@ -564,6 +671,7 @@ export function watchMermaid(target, { getDark = () => false } = {}) {
       if (!pre) return;
       const source = (code.textContent || '').trim();
       if (isSvgSource(source)) { entry.wrapper = widgetCardFromCode(code, getDark()); if (entry.wrapper) return; }
+      if (isMathCodeBlock(code)) { entry.wrapper = mathCardFromCode(code, getDark()); if (entry.wrapper) return; }
       if (!isMermaidCodeBlock(code)) { disposeChat(code); return; }
       const diagram = diagramCard(pre, getDark(), chatSignal.signal);
       entry.wrapper = diagram.card;
@@ -610,12 +718,12 @@ export function watchMermaid(target, { getDark = () => false } = {}) {
       }
       // Gate must admit BOTH mermaid blocks and bare-SVG widget blocks —
       // the timer callback triages (svg → widget card, mermaid → diagram card).
-      if (isMermaidCodeBlock(code) || isSvgSource(code.textContent)) schedule(code);
+      if (isMermaidCodeBlock(code) || isSvgSource(code.textContent) || isMathCodeBlock(code)) schedule(code);
     }
   });
   observer.observe(target, { childList: true, subtree: true, characterData: true });
   target.querySelectorAll('pre > code').forEach(code => {
-    if (isMermaidCodeBlock(code) || isSvgSource(code.textContent)) schedule(code);
+    if (isMermaidCodeBlock(code) || isSvgSource(code.textContent) || isMathCodeBlock(code)) schedule(code);
   });
   const rebuildAll = () => {
     for (const code of [...chatEntries.keys()]) {
@@ -624,7 +732,7 @@ export function watchMermaid(target, { getDark = () => false } = {}) {
       if (entry?.wrapper?.classList?.contains('mds-widget')) continue;
       if (!code.isConnected) { disposeChat(code); continue; }
       disposeChat(code);
-      if (isMermaidCodeBlock(code) || isSvgSource(code.textContent)) schedule(code);
+      if (isMermaidCodeBlock(code) || isSvgSource(code.textContent) || isMathCodeBlock(code)) schedule(code);
     }
   };
   return {
@@ -636,3 +744,8 @@ export function watchMermaid(target, { getDark = () => false } = {}) {
     rebuildAll,
   };
 }
+
+// Tree-shaking guard: attach these functions to globalThis so esbuild keeps them.
+// They are called from watchMermaid closures but the minifier cannot always
+// prove reachability across the dynamic dispatch boundary.
+globalThis.__mdsMath = { looksLikeMath, isMathCodeBlock, mathCardFromCode };

@@ -29,4 +29,9 @@
 .mds-widget-title{padding:8px 14px;border-bottom:1px solid var(--dsw-alias-border-l1,#d0d7de);font:500 13px system-ui,sans-serif;color:var(--dsw-alias-label-secondary,#57606a);}
 .mds-widget-body{padding:16px;overflow:visible;min-height:min-content;height:auto;max-height:none;}.mds-widget-body svg{display:block;margin:0 auto;width:auto;height:auto;max-width:none;max-height:none;vertical-align:top;}
 .mds-widget-body text:not([fill]){fill:var(--dsw-alias-label-primary,#1F2937)}
+.mds-math{border:1px solid var(--dsw-alias-border-l1,#d0d7de);border-radius:10px;margin:16px 0;overflow:hidden;background:var(--dsw-alias-bg-base,#fff);height:auto;min-height:min-content;}
+.mds-math-pane{padding:16px;overflow-x:auto;overflow-y:hidden;text-align:center;}
+.mds-math-pane .katex{display:inline-block;}
+.mds-math-pane .katex-display{display:block;margin:0.5em 0;}
+.mds-math-error{padding:12px;background:var(--dsw-alias-bg-layer-2,#f6f8fa);color:var(--dsw-alias-label-secondary,#57606a);font:13px/1.6 Consolas,monospace;white-space:pre-wrap;word-break:break-all;}
 @media(max-width:500px){.mds-document{padding:12px;}.mds-toolbar{gap:4px;}.mds-toolbar button{padding:3px 6px;}}

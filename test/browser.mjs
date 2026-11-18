@@ -43,13 +43,11 @@ assert.equal(registration.options.key, '@deepseek-ai/dsh-client-ui-sidebar-docum
 const sample = `# 原生右侧 Markdown 预览验证\n\n[相对链接](docs/other.md#L2)\n\n| 项目 | 状态 |\n|---|---|\n| 离线图表 | 是 |\n\n- [x] 已完成\n- [ ] 待完成\n\n脚注示例[^one]\n\n[^one]: 说明正文\n\n质能关系 $E=mc^2$。\n\n$$\ne^{i\\pi}+1=0\n$$\n\n\`\`\`js\nconst answer = 42;\n\`\`\`\n\n\`\`\`mermaid\nflowchart LR\n A[打开文件] --> B[右侧预览] --> C[本地渲染]\n\`\`\`\n\n\`\`\`mermaid\nsequenceDiagram\n 用户->>DSH: 打开 Markdown\n DSH-->>用户: 显示图表\n\`\`\`\n\n\`\`\`mermaid\ngantt\n title 验证计划\n dateFormat YYYY-MM-DD\n section 验证\n 渲染 :done, a1, 2026-10-08, 1d\n\`\`\`\n\n\`\`\`mermaid\npie title 能力\n "文档" : 60\n "图表" : 40\n\`\`\`\n\n\`\`\`mermaid\nflowchart LR\n W2[Codex / Claude Code / KimiCode / OpenCode (ACP)] --> W1[DSH Native]\n\`\`\`\n`;
 await page.evaluate(text => window.__render(text), sample);
 await page.waitForSelector('.mds-document[data-state="ready"]', {timeout:60000});
+// Without a sidebar opener (openFile), relative Markdown links fall back to the
+// authenticated media route instead of a raw href that 404s against the page URL.
 const relativeLinkHref = await page.evaluate(() => [...document.querySelectorAll('.mds-document a[href]')]
   .find(a => a.textContent.includes('相对链接'))?.getAttribute('href'));
-assert.ok(relativeLinkHref?.includes('docs/other.md'), `本地链接应保留原始目标，实际 ${relativeLinkHref}`);
-// The same Markdown link opens through the Sidebar when an opener is present.
-await page.evaluate(() => [...document.querySelectorAll('.mds-document a[href]')]
-  .find(a => a.textContent.includes('相对链接')).click());
-assert.equal(await page.evaluate(() => window.__opened), 'dsh-resource://file/session/test-session/docs/other.md');
+assert.ok(relativeLinkHref?.includes('api/file'), `本地 .md 链接应走认证媒体路由，实际 ${relativeLinkHref}`);
 // Perf regression: content.eof is not a render input (the render only reads
 // content.text), so flipping it on identical text must not rebuild the document
 // or re-lay out its Mermaid diagrams.
@@ -193,6 +191,46 @@ await chatWidget.getByRole('button', { name: '全屏', exact: true }).click();
 assert.equal(await page.locator('dialog.mds-fullscreen').isVisible(), true, 'SVG widget fullscreen control should open a dialog');
 await page.locator('dialog.mds-fullscreen').getByRole('button', { name: '放大' }).click();
 await page.locator('dialog.mds-fullscreen').getByRole('button', { name: '关闭' }).click();
+// v1.3.8: chat-side math formula rendering.
+await page.evaluate(() => {
+  const wrap = document.createElement('div');
+  wrap.innerHTML = '<pre><code>$$e^{i\\pi}+1=0$$</code></pre>';
+  window.__chat.appendChild(wrap);
+});
+await page.waitForSelector('#chat-simulator .mds-math .katex', { timeout: 60000 });
+assert.equal(await page.locator('#chat-simulator .mds-math').count(), 1, 'block math $$ must render as a math card');
+assert.ok((await page.locator('#chat-simulator .mds-math .katex').first().textContent()).includes('e'), 'KaTeX must render the formula content');
+// Inline math $...$
+await page.evaluate(() => {
+  const wrap = document.createElement('div');
+  wrap.innerHTML = '<pre><code>$E=mc^2$</code></pre>';
+  window.__chat.appendChild(wrap);
+});
+// Wait for the second math card to appear (not just any .katex)
+await page.waitForFunction(() => document.querySelectorAll('#chat-simulator .mds-math').length >= 2, { timeout: 60000 });
+assert.equal(await page.locator('#chat-simulator .mds-math').count(), 2, 'inline math $ must render as a second math card');
+assert.ok((await page.locator('#chat-simulator .mds-math').nth(1).locator('.katex').textContent()).includes('E'), 'KaTeX must render the inline formula content');
+// Anti-misjudge: price text must NOT render as math
+await page.evaluate(() => {
+  const wrap = document.createElement('div');
+  wrap.innerHTML = '<pre><code>The price is $5, and $10 for two</code></pre>';
+  window.__chat.appendChild(wrap);
+});
+await page.waitForTimeout(1200);
+assert.equal(await page.locator('#chat-simulator .mds-math').count(), 2, 'price text must NOT render as math (anti-misjudge)');
+// Anti-misjudge: shell variable must NOT render as math
+await page.evaluate(() => {
+  const wrap = document.createElement('div');
+  wrap.innerHTML = '<pre><code>echo $HOME and ${PATH}</code></pre>';
+  window.__chat.appendChild(wrap);
+});
+await page.waitForTimeout(1200);
+assert.equal(await page.locator('#chat-simulator .mds-math').count(), 2, 'shell variables must NOT render as math (anti-misjudge)');
+// Math source toggle
+await page.locator('#chat-simulator .mds-math').first().getByRole('button', { name: '源码' }).click();
+assert.ok(await page.locator('#chat-simulator .mds-math').first().locator('.mds-math-error').isVisible(), 'source toggle must show raw TeX');
+await page.locator('#chat-simulator .mds-math').first().getByRole('button', { name: '公式' }).click();
+assert.ok(await page.locator('#chat-simulator .mds-math').first().locator('.mds-math-pane').isVisible(), 'toggle back must show rendered formula');
 // Non-diagram code blocks must remain untouched by the watcher.
 await page.evaluate(() => {
   const wrap = document.createElement('div');
