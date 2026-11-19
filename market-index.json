@@ -1,0 +1,70 @@
+{
+  "format": 1,
+  "title": {
+    "en": "BioAIEvolu DSH Plugins",
+    "zh": "BioAIEvolu 的 DSH 插件合集"
+  },
+  "description": {
+    "en": "BioAIEvolu's DSH plugin collection: Markdown rendering, diagrams, math formulas, and more.",
+    "zh": "BioAIEvolu 的 DSH 插件合集：Markdown 渲染、图表、数学公式等。"
+  },
+  "metadata": {
+    "name": "BioAIEvolu DSH Plugins",
+    "categories": {
+      "docs": {
+        "title": {
+          "en": "Docs & Rendering",
+          "zh": "文档与渲染"
+        }
+      }
+    },
+    "labels": {},
+    "sortKeys": {}
+  },
+  "plugins": [
+    {
+      "name": "dsh-md-studio",
+      "title": {
+        "en": "Markdown Studio",
+        "zh": "Markdown Studio"
+      },
+      "description": {
+        "en": "Complete Markdown renderer for file preview and chat: Mermaid diagrams, SVG architecture (mds-diagram), KaTeX math formulas, GFM tables. Offline.",
+        "zh": "文档预览+对话消息双场景完整 Markdown 渲染：Mermaid 图表、SVG 架构图、KaTeX 公式、GFM 表格。离线可用。"
+      },
+      "icon": "https://raw.githubusercontent.com/BioAIEvolu/dsh-md-studio/main/docs/images/icon.svg",
+      "homepage": "https://github.com/BioAIEvolu/dsh-md-studio#readme",
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/BioAIEvolu/dsh-md-studio.git"
+      },
+      "metadata": {
+        "category": "docs",
+        "keywords": [
+          "markdown",
+          "mermaid",
+          "svg",
+          "katex",
+          "math",
+          "diagram",
+          "flowchart",
+          "gfm",
+          "offline"
+        ]
+      },
+      "versions": [
+        {
+          "version": "1.3.9",
+          "publishTimestamp": 1795046400,
+          "source": {
+            "type": "npm",
+            "registry": "https://registry.npmjs.org/"
+          },
+          "engines": {
+            "dsh": ">=0.2.0-rc.2 <0.3.0-0"
+          }
+        }
+      ]
+    }
+  ]
+}
