@@ -6,6 +6,10 @@ import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import { findChromium } from './browser-path.mjs';
 const root = resolve(import.meta.dirname, '..');
+// TEMPORARY: surface any top-level crash as a CI annotation (remove with the CI fix).
+const __fmtErr = (e) => String(e?.message || e).split('\n').slice(0, 8).join(' | ').slice(0, 700);
+process.on('unhandledRejection', (e) => console.log('::error::PROBE unhandledRejection: ' + __fmtErr(e) + ' ## stack: ' + String(e?.stack || '').split('\n').slice(1, 4).join(' | ').slice(0, 400)));
+process.on('uncaughtException', (e) => { console.log('::error::PROBE uncaughtException: ' + __fmtErr(e) + ' ## stack: ' + String(e?.stack || '').split('\n').slice(1, 4).join(' | ').slice(0, 400)); setTimeout(() => process.exit(1), 500); });
 // The browser test injects a real React runtime before loading the plugin
 // bundle. It is built from devDependencies on demand (a committed bundle would
 // go stale with every React bump), so fresh clones and CI work without a
@@ -56,7 +60,7 @@ const executablePath = await findChromium();
 const browser = await chromium.launch({ executablePath, headless: true });
 const page = await browser.newPage({ viewport: { width: 1060, height: 980 }, acceptDownloads: true });
 const errors = [], network = [];
-page.on('pageerror', e => errors.push(e.message));
+page.on('pageerror', e => { errors.push(e.message); console.log('::error::PROBE pageerror: ' + __fmtErr(e)); });
 await page.route('**/*', route => { network.push(route.request().url()); return route.abort(); });
 await page.setContent('<html lang="zh-CN"><head><base href="http://127.0.0.1:3080/"></head><body style="margin:0"><main id="preview"></main></body></html>');
 await page.addScriptTag({path: resolve(root, 'test/react-runtime.js')});
