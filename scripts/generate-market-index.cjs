@@ -49,8 +49,8 @@ const index = {
       },
       versions: [
         {
-          version: "1.3.9",
-          publishTimestamp: Math.floor(new Date("2026-11-19T00:00:00Z").getTime() / 1000),
+          version: "1.3.10",
+          publishTimestamp: Math.floor(new Date("2026-11-20T00:00:00Z").getTime() / 1000),
           source: {
             type: "npm",
             registry: "https://registry.npmjs.org/"
