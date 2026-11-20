@@ -10,6 +10,20 @@ metadata:
 
 ## 一、发布前检查（Pre-Release）
 
+### 0. DSH 内核版本核对（先做这一项）
+
+**规则：`engines.dsh` 下限必须等于实际跑过验收的内核版本，不能写更早的版本。**
+
+```powershell
+dsh --version                                                 # 实测内核
+node -e "console.log(require('./package.json').engines.dsh)"  # 当前声明
+```
+
+- 声明下限 == 实测版本 → ✅
+- 声明下限更早（如 `>=0.2.0-rc.2` 而实测 `0.2.2-rc.5`）→ ❌ 声称支持从未验证的版本，必须收紧
+- 全部载体必须一致：`package.json`、`market-index.json`（及生成脚本）、README 中英、`COMPATIBILITY.md`、`INSTALL.md`、契约测试断言
+- 残留 grep 确认没有旧范围漏网（CHANGELOG 里的历史说明除外）
+
 ### 1. 版本常量三方一致（最高优先级）
 
 升版本号时，**必须同步修改三处**：
@@ -170,37 +184,41 @@ gh release view vX.X.X --json assets,url --jq '{url: .url, assets: [.assets[].na
 ## 五、版本升级标准流程
 
 ```bash
-# 1. 同步三处版本号
+# 1. DSH 内核版本核对（第一项，不可跳过）
+#    dsh --version 与 package.json engines.dsh 比对；下限 == 实测验证版本
+#    market-index / README / COMPATIBILITY 全载体同步；残留 grep
+
+# 2. 同步三处版本号
 #    - package.json
 #    - src/client.js 的 data-md-studio
 #    - src/renderer.js 的 diagnostics.version
 
-# 2. 构建 + 测试
+# 3. 构建 + 测试
 npm run build
 npm test
 
-# 3. 预发布验证
+# 4. 预发布验证
 npm pack --pack-destination /tmp/check
 # 解压验证版本常量一致
 
-# 4. 提交 + 推送 + 打 tag
+# 5. 提交 + 推送 + 打 tag
 git add -A
 git commit -m "release: vX.X.X"
 git push origin main
 git tag -a vX.X.X -m "vX.X.X"
 git push origin vX.X.X
 
-# 5. 创建 GitHub Release
+# 6. 创建 GitHub Release
 gh release create vX.X.X ./artifacts/*.tgz --notes-file release-notes.md
 
-# 6. 发布 npm
+# 7. 发布 npm
 npm publish --access public
 
-# 7. 等待索引更新（45-60秒）
+# 8. 等待索引更新（45-60秒）
 Start-Sleep -Seconds 60
 npm view <pkg> dist-tags.latest  # 确认指向新版本
 
-# 8. 最终验证
+# 9. 最终验证
 npm pack <pkg>@X.X.X --pack-destination /tmp/verify
 # 解压检查版本常量
 ```
