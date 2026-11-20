@@ -55,7 +55,7 @@ DeepSeek Harness's right-sidebar preview is great — except ` ```mermaid ` bloc
 
 ## 🚀 Install
 
-> Requires DeepSeek Harness `0.2.0-rc.2+` (client slot API, see [Compatibility](#️-compatibility))
+> Requires DeepSeek Harness `0.2.2-rc.5+` (validated on 0.2.2-rc.5; see [Compatibility](#️-compatibility))
 
 **Option 1 · In-app plugin market (dshmarket)** — search `dsh-md-studio`.
 
@@ -107,7 +107,7 @@ File reading, paging, reload and lifecycle remain DSH's job — the plugin only 
 
 ## ⚠️ Compatibility
 
-- Built for **DSH `0.2.0-rc.2`** (`engines.dsh: >=0.2.0-rc.2 <0.3.0-0`); other versions unverified — open an issue if the slot API changes
+- Built for **DSH `0.2.2-rc.5`** (validated on 0.2.2-rc.5) (`engines.dsh: >=0.2.2-rc.5 <0.3.0-0`); other versions unverified — open an issue if the slot API changes
 - Limits: 2M chars per document, 50k chars / 2000 lines / 2000 edges per diagram
 - Sanitized Mermaid output: diagram interactions and external references are disabled
 

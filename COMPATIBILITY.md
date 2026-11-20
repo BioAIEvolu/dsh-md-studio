@@ -1,16 +1,24 @@
-# dsh-md-studio v1.3.9 — DSH 0.2.2-rc.5 Compatibility Verification
+# dsh-md-studio v1.3.11 — DSH 0.2.2-rc.5 Compatibility Verification
 
-**Date**: 2026-11-19  
-**Plugin Version**: 1.3.9  
-**DSH Kernel**: 0.2.2-rc.5  
-**Declared Support**: `>=0.2.0-rc.2 <0.3.0-0`
+**Date**: 2026-11-20  
+**Plugin Version**: 1.3.11  
+**DSH Kernel**: 0.2.2-rc.5（实测安装版本，`dsh --version`）  
+**Declared Support**: `>=0.2.2-rc.5 <0.3.0-0`
+
+## Version Range Policy
+
+本插件只声明**实际验证过的内核下限**：`0.2.2-rc.5`。
+
+- ✅ 声明最低版本 = 实测验证版本，两者一致
+- ❌ 不再声称支持 `0.2.0-rc.2` / `0.2.2-rc.3` / `0.2.2-rc.4` —— 这些版本从未验证，此前的下限声明夸大了兼容范围
+- 更低的内核版本属于「未验证」，不承诺可用；如在这些版本上遇到问题，欢迎提 issue
 
 ## Version Range Validation
 
-✅ **DSH 0.2.2-rc.5 is within the declared support range**
+✅ **DSH 0.2.2-rc.5 is the declared and verified baseline**
 
-- Minimum: 0.2.0-rc.2
-- Current: 0.2.2-rc.5
+- Minimum: 0.2.2-rc.5
+- Verified: 0.2.2-rc.5
 - Maximum: < 0.3.0-0
 
 ## Test Suite Results
@@ -72,7 +80,7 @@ All test scenarios passed:
 
 ## Breaking Changes Check
 
-**No breaking changes detected** between DSH 0.2.2-rc.3 (development baseline) and 0.2.2-rc.5:
+**No breaking changes detected** between DSH 0.2.2-rc.3 (development reference) and 0.2.2-rc.5 (verified baseline):
 
 - Plugin activation mechanism: ✅ Compatible
 - Client injection lifecycle: ✅ Compatible
@@ -94,7 +102,7 @@ All test scenarios passed:
 
 ## Conclusion
 
-✅ **dsh-md-studio v1.3.9 is fully compatible with DSH 0.2.2-rc.5**
+✅ **dsh-md-studio v1.3.11 is fully compatible with DSH 0.2.2-rc.5**
 
 All features work as expected:
 - File preview rendering
@@ -108,11 +116,11 @@ No code changes required for rc.5 support.
 
 ## Upgrade Path
 
-Users on DSH 0.2.0-rc.2 through 0.2.2-rc.5 can safely install or upgrade to dsh-md-studio v1.3.9:
+Users on DSH 0.2.2-rc.5 can safely install or upgrade to dsh-md-studio v1.3.11:
 
 ```bash
 # Install
-npm install -g dsh-md-studio@1.3.9
+npm install -g dsh-md-studio@1.3.11
 
 # Or via DSH plugin manager
 dsh plugin add dsh-md-studio
@@ -122,14 +130,14 @@ After installation, **restart DSH completely** (not just refresh) to activate th
 
 ## Version Support Matrix
 
-| DSH Version | dsh-md-studio 1.3.9 | Notes |
-|-------------|---------------------|-------|
-| 0.2.0-rc.2  | ✅ Supported | Minimum version |
-| 0.2.0-rc.3  | ✅ Supported | - |
-| 0.2.1       | ✅ Supported | - |
-| 0.2.2-rc.3  | ✅ Supported | Development baseline |
-| 0.2.2-rc.4  | ✅ Supported | - |
-| 0.2.2-rc.5  | ✅ Verified | Current, tested 2026-11-19 |
+| DSH Version | dsh-md-studio 1.3.11 | Notes |
+|-------------|----------------------|-------|
+| 0.2.0-rc.2  | ❌ Not advertised | Never verified — previous lower bound claimed unverified support |
+| 0.2.0-rc.3  | ❌ Not advertised | Never verified |
+| 0.2.1       | ❌ Not advertised | Never verified |
+| 0.2.2-rc.3  | ❌ Not advertised | Development reference only, not a verified baseline |
+| 0.2.2-rc.4  | ❌ Not advertised | Never verified |
+| 0.2.2-rc.5  | ✅ Verified | Declared minimum, tested 2026-11-19 |
 | 0.3.0+      | ❌ Not supported | Breaking changes expected |
 
 ---

@@ -49,14 +49,14 @@ const index = {
       },
       versions: [
         {
-          version: "1.3.10",
-          publishTimestamp: Math.floor(new Date("2026-11-20T00:00:00Z").getTime() / 1000),
+          version: "1.3.11",
+          publishTimestamp: Math.floor(Date.now() / 1000),
           source: {
             type: "npm",
             registry: "https://registry.npmjs.org/"
           },
           engines: {
-            dsh: ">=0.2.0-rc.2 <0.3.0-0"
+            dsh: ">=0.2.2-rc.5 <0.3.0-0"
           }
         }
       ]
