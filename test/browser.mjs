@@ -31,6 +31,27 @@ if (!existsSync(runtimePath)) {
     outfile: runtimePath,
   });
 }
+// TEMPORARY diagnostic for the CI-only startup failure (remove with the CI fix).
+// Emits findings as ::error:: workflow annotations, which are readable via the
+// public check-run annotations API even without authenticated job-log access.
+try {
+  const { execSync } = await import('node:child_process');
+  const sh = (cmd) => { try { return execSync(cmd, { shell: '/bin/bash', encoding: 'utf8' }).trim(); } catch (e) { return 'FAILED: ' + String(e.message).split('\n')[0].slice(0, 160); } };
+  console.log('::error::PROBE system-chrome: ' + sh('google-chrome --version 2>&1 | head -1'));
+  console.log('::error::PROBE pw-cache: ' + sh('ls -1 "$HOME/.cache/ms-playwright" 2>&1 | tr "\n" " "'));
+  console.log('::error::PROBE nspr-nss: ' + sh("dpkg -l 2>/dev/null | grep -E 'libnspr4|libnss3' | awk '{print $2, $3}' | tr '\n' ';'"));
+  const probeExe = await findChromium();
+  console.log('::error::PROBE findChromium: ' + probeExe);
+  try {
+    const probeBrowser = await chromium.launch({ executablePath: probeExe, headless: true });
+    console.log('::error::PROBE launch OK: ' + probeBrowser.version());
+    await probeBrowser.close();
+  } catch (e) {
+    console.log('::error::PROBE launch FAILED: ' + probeExe + ' :: ' + String(e.message).split('\n').slice(0, 8).join(' | ').slice(0, 700));
+  }
+} catch (probeError) {
+  console.log('::error::PROBE crashed: ' + String(probeError?.message || probeError).slice(0, 300));
+}
 const executablePath = await findChromium();
 const browser = await chromium.launch({ executablePath, headless: true });
 const page = await browser.newPage({ viewport: { width: 1060, height: 980 }, acceptDownloads: true });
