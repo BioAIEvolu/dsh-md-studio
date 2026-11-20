@@ -40,7 +40,7 @@ const registration = await page.evaluate(() => {
 });
 assert.equal(registration.id, 'dsh-md-studio');
 assert.equal(registration.options.key, '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown');
-const sample = `# 原生右侧 Markdown 预览验证\n\n[相对链接](docs/other.md#L2)\n\n| 项目 | 状态 |\n|---|---|\n| 离线图表 | 是 |\n\n- [x] 已完成\n- [ ] 待完成\n\n脚注示例[^one]\n\n[^one]: 说明正文\n\n质能关系 $E=mc^2$。\n\n$$\ne^{i\\pi}+1=0\n$$\n\n\`\`\`js\nconst answer = 42;\n\`\`\`\n\n\`\`\`mermaid\nflowchart LR\n A[打开文件] --> B[右侧预览] --> C[本地渲染]\n\`\`\`\n\n\`\`\`mermaid\nsequenceDiagram\n 用户->>DSH: 打开 Markdown\n DSH-->>用户: 显示图表\n\`\`\`\n\n\`\`\`mermaid\ngantt\n title 验证计划\n dateFormat YYYY-MM-DD\n section 验证\n 渲染 :done, a1, 2026-10-08, 1d\n\`\`\`\n\n\`\`\`mermaid\npie title 能力\n "文档" : 60\n "图表" : 40\n\`\`\`\n\n\`\`\`mermaid\nflowchart LR\n W2[Codex / Claude Code / KimiCode / OpenCode (ACP)] --> W1[DSH Native]\n\`\`\`\n`;
+const sample = `# 原生右侧 Markdown 预览验证\n\n[相对链接](docs/other.md#L2)\n\n| 项目 | 状态 |\n|---|---|\n| 离线图表 | 是 |\n\n- [x] 已完成\n- [ ] 待完成\n\n脚注示例[^one]\n\n[^one]: 说明正文\n\n质能关系 $E=mc^2$。\n\n$$\ne^{i\\pi}+1=0\n$$\n\n\`\`\`js\nconst answer = 42;\n\`\`\`\n\n\`\`\`mermaid\nflowchart LR\n A[打开文件] --> B[右侧预览] --> C[本地渲染]\n\`\`\`\n\n\`\`\`mermaid\nsequenceDiagram\n 用户->>DSH: 打开 Markdown\n DSH-->>用户: 显示图表\n\`\`\`\n\n\`\`\`mermaid\ngantt\n title 验证计划\n dateFormat YYYY-MM-DD\n section 验证\n 渲染 :done, a1, 2026-10-08, 1d\n\`\`\`\n\n\`\`\`mermaid\npie title 能力\n "文档" : 60\n "图表" : 40\n\`\`\`\n\n\`\`\`mermaid\nflowchart LR\n W2[Codex / Claude Code / KimiCode / OpenCode (ACP)] --> W1[DSH Native]\n\`\`\`\n\n\`\`\`mermaid\nflowchart LR\n A[事实层<br/>每次唤醒采样] --> B[分类层<br/>TcpFailed 只留"关联在+拒连/超时"]\n\`\`\`\n`;
 await page.evaluate(text => window.__render(text), sample);
 await page.waitForSelector('.mds-document[data-state="ready"]', {timeout:60000});
 // Without a sidebar opener (openFile), relative Markdown links fall back to the
@@ -57,12 +57,13 @@ const rendersBeforeEofFlip = await page.evaluate(() => window.__dshMdStudio.docu
 await page.evaluate(text => window.__render(text, true), sample);
 await page.waitForTimeout(500);
 assert.equal(await page.evaluate(() => window.__dshMdStudio.documents), rendersBeforeEofFlip, 'eof flip must not rebuild the document');
-assert.equal(await page.locator('[data-mds-root] .mds-diagram[data-state="ok"] svg').count(), 5);
+assert.equal(await page.locator('[data-mds-root] .mds-diagram[data-state="ok"] svg').count(), 6);
 assert.ok((await page.locator('[data-mds-root] .mds-diagram').first().locator('svg').textContent()).includes('打开文件'), 'flowchart SVG must retain visible node labels');
-assert.equal(await page.locator('[data-mds-root] .mds-badge', { hasText: '已自动修复' }).count(), 1, 'parenthesised node label must be auto-repaired');
+assert.equal(await page.locator('[data-mds-root] .mds-badge', { hasText: '已自动修复' }).count(), 2, 'parenthesised and bare-quote node labels must be auto-repaired');
 // Mermaid renders long labels as positioned tspans; concatenated text may drop
 // inter-word spaces, so compare whitespace-insensitively.
-assert.ok((await page.locator('[data-mds-root] .mds-diagram[data-state="ok"] svg').last().textContent()).replace(/\s+/g, '').includes('OpenCode(ACP)'), 'repaired label must keep its text');
+assert.ok((await page.locator('[data-mds-root] .mds-diagram[data-state="ok"] svg').last().textContent()).replace(/\s+/g, '').includes('关联在+拒连/超时'), 'quote-repaired label must keep its text');
+assert.ok((await page.locator('[data-mds-root] .mds-diagram[data-state="ok"] svg').nth(-2).textContent()).replace(/\s+/g, '').includes('OpenCode(ACP)'), 'paren-repaired label must keep its text');
 assert.equal(await page.locator('[data-mds-root] table').count(), 1);
 assert.equal(await page.locator('[data-mds-root] input[type="checkbox"]').count(), 2);
 assert.equal(await page.locator('[data-mds-root] .footnotes').count(), 1);
@@ -102,7 +103,7 @@ await page.waitForSelector('.mds-document[data-state="ready"]');
 await page.evaluate(text => window.__render(text), sample + '\n```mermaid\nnot-a-valid-diagram\n```\n<script>window.__injected=true</script><img src="" onerror="window.__injected=true">');
 await page.waitForSelector('.mds-document[data-state="partial"]');
 assert.equal(await page.locator('[data-mds-root] .mds-diagram[data-state="error"]').count(), 1);
-assert.equal(await page.locator('[data-mds-root] .mds-diagram[data-state="ok"]').count(), 5);
+assert.equal(await page.locator('[data-mds-root] .mds-diagram[data-state="ok"]').count(), 6);
 assert.equal(await page.evaluate(() => !!window.__injected), false);
 // Regression: rapid file changes never display a stale diagram result.
 await page.evaluate(() => { window.__render('# Replacement\n\nOnly this new file.'); });
@@ -115,7 +116,7 @@ await page.evaluate(text => window.__render(text), userDemo);
 await page.waitForSelector('.mds-document[data-state="ready"]', { timeout: 60000 });
 assert.equal(await page.locator('[data-mds-root] .mds-diagram[data-state="ok"] svg').count(), 4, 'actual demo must render all four diagrams');
 assert.ok((await page.locator('[data-mds-root] .mds-diagram').first().locator('svg').textContent()).includes('打开 Markdown 文件'));
-await page.screenshot({ path: resolve(root, 'test/artifacts/user-demo-dark.png'), fullPage: true });
+await page.screenshot({ path: resolve(root,'test/artifacts/user-demo-dark.png'), fullPage: true });
 // TODO(v1.3.1): add mds-diagram widget test — the fence + hydration pipeline works
 // (verified via build + manual test) but the test harness needs a proper React
 // re-render sequencing fix for the assertion to be reliable.
@@ -297,7 +298,7 @@ await page.evaluate(() => { window.__root.unmount(); window.__effects.reverse().
 assert.equal(await page.locator('style[data-plugin="dsh-md-studio"]').count(), 0);
 assert.equal(errors.length, 0, JSON.stringify(errors));
 assert.equal(network.length, 0, 'Renderer should make zero network requests: '+JSON.stringify(network));
-const result = {passed:true,browser:await browser.version(),nativeSlot:registration.options.key,svgDiagrams:5,externalRequests:network.length,pageErrors:errors.length,checks:['GFM table','task lists','footnotes','inline and block KaTeX','syntax highlight','four Mermaid types','mermaid syntax auto-repair','source toggle','fullscreen','SVG download','dark theme rerender','invalid diagram isolation','HTML sanitization','file switching','plugin disposal','chat mermaid rendering','chat streaming stability','chat no-double-render','chat bare-svg widget','plain code untouched','chat theme rebuild','doc mds-diagram widget','doc bare-svg widget','chat disposal'],status};
+const result = {passed:true,browser:await browser.version(),nativeSlot:registration.options.key,svgDiagrams:6,externalRequests:network.length,pageErrors:errors.length,checks:['GFM table','task lists','footnotes','inline and block KaTeX','syntax highlight','four Mermaid types','mermaid syntax auto-repair','mermaid bare-quote auto-repair','source toggle','fullscreen','SVG download','dark theme rerender','invalid diagram isolation','HTML sanitization','file switching','plugin disposal','chat mermaid rendering','chat streaming stability','chat no-double-render','chat bare-svg widget','plain code untouched','chat theme rebuild','doc mds-diagram widget','doc bare-svg widget','chat disposal'],status};
 await writeFile(resolve(root,'test/artifacts/result.json'),JSON.stringify(result,null,2));
 console.log(JSON.stringify(result,null,2));
 await browser.close();
