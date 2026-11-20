@@ -257,20 +257,32 @@ function openFullscreen(svg, ownerSignal) {
   viewport.addEventListener('pointerup', () => { drag = null; }, { signal: ctrl.signal });
   viewport.addEventListener('wheel', e => { e.preventDefault(); scale = Math.max(.2, Math.min(8, scale * (e.deltaY < 0 ? 1.1 : 1 / 1.1))); transform(); }, { passive: false, signal: ctrl.signal });
 }
-// Conservative auto-repair for the most common real-world Mermaid breaker:
-// ASCII parentheses inside flowchart/graph node labels and |edge| labels,
-// e.g. `W2[Codex / Claude Code (ACP)]`, which mermaid cannot parse. Quoting
-// the label preserves the text and renders a standard rectangle. Shape
-// brackets (`[( )]` cylinder, `[[ ]]` subroutine) are left untouched, and
-// anything outside flowchart/graph sources is never modified.
+// Conservative auto-repair for the most common real-world Mermaid breakers
+// inside flowchart/graph node labels and |edge| labels:
+// - ASCII parentheses, e.g. `W2[Codex / Claude Code (ACP)]`;
+// - a bare ASCII double quote, e.g. `C[TcpFailed 只留"关联在+拒连/超时"]` (#12),
+//   which mermaid's lexer rejects with `got 'STR'`.
+// Quoting the label preserves the text and renders a standard rectangle; inner
+// double quotes become single quotes because quotes cannot nest inside a
+// quoted label. A label already wrapped in quotes is left untouched on both
+// node and edge paths (previously an already-quoted edge label could be
+// re-wrapped into an escaped `"\"...\""` nest), shape brackets (`[( )]`
+// cylinder, `[[ ]]` subroutine) are never modified, and anything outside
+// flowchart/graph sources is never touched.
 export function repairMermaid(source) {
   if (!/^\s*(?:flowchart|graph)\b/m.test(String(source))) return source;
-  let out = String(source).replace(/\[([^\[\]""\n]+)\]/g, (m, inner) => {
-    if (!/[()]/.test(inner)) return m;
+  const quoted = /^["“”'].*["“”']$/;
+  let out = String(source).replace(/\[([^\[\]\n]+)\]/g, (m, inner) => {
     if (m.startsWith('[(') || m.startsWith('[[')) return m;
+    if (quoted.test(inner)) return m;
+    if (!/[()]/.test(inner) && !inner.includes('"')) return m;
     return '[' + JSON.stringify(inner.replace(/"/g, "'")) + ']';
   });
-  out = out.replace(/\|([^|\n]+)\|/g, (m, inner) => /[()]/.test(inner) ? '|' + JSON.stringify(inner) + '|' : m);
+  out = out.replace(/\|([^|\n]+)\|/g, (m, inner) => {
+    if (quoted.test(inner)) return m;
+    if (!/[()]/.test(inner) && !inner.includes('"')) return m;
+    return '|' + JSON.stringify(inner.replace(/"/g, "'")) + '|';
+  });
   return out;
 }
 // -----------------------------------------------------------------------
@@ -403,7 +415,7 @@ function diagramCard(pre, dark, ownerSignal) {
       }
       if (signal.aborted) return;
       card.dataset.state = 'error'; error.hidden = false;
-      error.textContent = `图表未能绘制：${first.message || first}\n若为语法问题，请修正后重新打开；常见错误：节点标签中的英文括号需写为 ["文字 (括号)"]。`;
+      error.textContent = `图表未能绘制：${first.message || first}\n若为语法问题，请修正后重新打开；常见错误：节点标签中的英文括号需写为 ["文字 (括号)"]，英文双引号需改写为单引号或全角引号。`;
       pane.hidden = true; pre.hidden = false; diagnostics.errors++;
     }
   });
