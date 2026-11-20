@@ -1,9 +1,36 @@
 import { chromium } from 'playwright-core';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
+import { build } from 'esbuild';
 import { findChromium } from './browser-path.mjs';
 const root = resolve(import.meta.dirname, '..');
+// The browser test injects a real React runtime before loading the plugin
+// bundle. It is built from devDependencies on demand (a committed bundle would
+// go stale with every React bump), so fresh clones and CI work without a
+// build artifact in the repository.
+const runtimePath = resolve(root, 'test/react-runtime.js');
+if (!existsSync(runtimePath)) {
+  await build({
+    stdin: {
+      contents: [
+        "import React from 'react';",
+        "import { createRoot } from 'react-dom/client';",
+        'window.__testReact = React;',
+        'window.__testCreateRoot = (el) => createRoot(el);',
+      ].join('\n'),
+      loader: 'js',
+      resolveDir: root,
+    },
+    bundle: true,
+    format: 'iife',
+    platform: 'browser',
+    target: 'es2020',
+    minify: true,
+    outfile: runtimePath,
+  });
+}
 const executablePath = await findChromium();
 const browser = await chromium.launch({ executablePath, headless: true });
 const page = await browser.newPage({ viewport: { width: 1060, height: 980 }, acceptDownloads: true });
@@ -116,7 +143,7 @@ await page.evaluate(text => window.__render(text), userDemo);
 await page.waitForSelector('.mds-document[data-state="ready"]', { timeout: 60000 });
 assert.equal(await page.locator('[data-mds-root] .mds-diagram[data-state="ok"] svg').count(), 4, 'actual demo must render all four diagrams');
 assert.ok((await page.locator('[data-mds-root] .mds-diagram').first().locator('svg').textContent()).includes('打开 Markdown 文件'));
-await page.screenshot({ path: resolve(root,'test/artifacts/user-demo-dark.png'), fullPage: true });
+await page.screenshot({ path: resolve(root, 'test/artifacts/user-demo-dark.png'), fullPage: true });
 // TODO(v1.3.1): add mds-diagram widget test — the fence + hydration pipeline works
 // (verified via build + manual test) but the test harness needs a proper React
 // re-render sequencing fix for the assertion to be reliable.
