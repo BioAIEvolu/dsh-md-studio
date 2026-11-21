@@ -2,6 +2,17 @@
 
 本项目所有显著变更都记录在此文件中。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循语义化版本。
 
+## [1.3.14] - 2026-11-21
+
+### 安全
+
+- **运行时资源路由加固**：`/dsh-md-studio/runtime` 只服务包内静态资源，现在额外做三件事：跨站请求（`Sec-Fetch-Site: cross-site`）返回 403 且 `Cache-Control: no-store`；响应带 `Cross-Origin-Resource-Policy: same-origin`，让 `<img>/`<script>`/字体等跨源嵌入在浏览器侧直接失败；补 `X-Content-Type-Options: nosniff`。没有 `Sec-Fetch-Site` 的 CLI/离线自检（curl 等）维持可用。
+- 新增 `test/runtime-route.mjs`：同源 200、跨站 403、目录穿越 404、非 GET/HEAD 405、HEAD 无 body，已接入 CI。
+
+### 系统提示
+
+- 图表指南补第 3 条硬规则：每个 `<text>` 必须自带 `fill`（不要只写在 `<g>` 上、更不依赖主题默认值），浅色芯片禁止白字/浅字，正文对比度 ≥4.5:1、文字 opacity ≥0.85。
+
 ## [1.3.13] - 2026-11-21
 
 ### 修复

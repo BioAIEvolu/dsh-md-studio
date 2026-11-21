@@ -33,5 +33,8 @@ jobs:
       - name: Browser tests (offline, real Chromium)
         run: node test/browser.mjs
 
+      - name: Runtime route security test
+        run: node test/runtime-route.mjs
+
       - name: Diagram contrast checker self-test
         run: node skills/mds-diagram-design/scripts/check-svg-contrast.mjs --self-test

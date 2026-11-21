@@ -42,8 +42,69 @@ const GUIDELINE = `## 图表组件（mds-diagram）
 必须遵守的三条硬规则：
 1. 画布级文字（图例、分组标签）用主题变量：style="fill:var(--dsw-alias-label-primary,#1F2937)"——禁止硬编码深灰，深色模式下会不可见。
 2. 节点用浅色底+深色字（蓝 #B5D4F4/#0C447C，橙 #FAC775/#633806，绿 #9FE1CB/#085041，紫 #CECBF6/#3C3489），全图最多 4 种语义色，≥3 种时必须有图例。
-3. 根元素 <svg viewBox="0 0 W H" width="100%" font-family="system-ui,sans-serif">，内放 <title>（作为卡片标题），箭头 marker id 加随机后缀防冲突。`;
+3. 每个 <text> 必须自带 fill（不要只写在 <g> 上、更不要依赖主题默认值）；浅色芯片禁止白字/浅字，正文对比度 ≥4.5:1，文字 opacity ≥0.85。
+4. 根元素 <svg viewBox="0 0 W H" width="100%" font-family="system-ui,sans-serif">，内放 <title>（作为卡片标题），箭头 marker id 加随机后缀防冲突。`;
 
+// 只服务包内静态资源，并把“任意网页都能调用本地路由”的探测面关掉：
+// 浏览器的同站加载（应用自身）正常放行，跨站请求直接 403；同时用
+// Cross-Origin-Resource-Policy: same-origin 让 <img>/<script>/font 这类跨源嵌入
+// 在浏览器侧就失败。没有 Sec-Fetch-Site 的客户端（curl、老浏览器）不属于网页
+// 调用场景，照常放行，便于离线自检。
+function createRuntimeHandler(dir = runtimeDir) {
+  const root = normalize(dir);
+  return async function handler(req, res) {
+    const security = {
+      "x-content-type-options": "nosniff",
+      "cross-origin-resource-policy": "same-origin",
+    };
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      res.writeHead(405, { ...security, allow: "GET, HEAD" });
+      res.end();
+      return;
+    }
+    const site = String(req.headers?.["sec-fetch-site"] ?? "").toLowerCase();
+    if (site === "cross-site") {
+      res.writeHead(403, { ...security, "cache-control": "no-store" });
+      res.end();
+      return;
+    }
+    const url = new URL(req.url ?? "/", "http://dsh.invalid");
+    let rel;
+    try {
+      rel = decodeURIComponent(url.pathname.slice(RUNTIME_ROUTE.length));
+    } catch {
+      res.writeHead(400, security);
+      res.end();
+      return;
+    }
+    rel = rel.replace(/^\/+/, "");
+    if (!rel || rel.includes("..") || rel.includes("\0") || rel.includes("\\") || /[:*?"<>|]/.test(rel)) {
+      res.writeHead(404, security);
+      res.end();
+      return;
+    }
+    const target = normalize(join(root, rel));
+    if (target !== root && !target.startsWith(root + sep)) {
+      res.writeHead(404, security);
+      res.end();
+      return;
+    }
+    try {
+      const body = await readFile(target);
+      const dot = target.lastIndexOf(".");
+      const ext = dot === -1 ? "" : target.slice(dot).toLowerCase();
+      res.writeHead(200, {
+        ...security,
+        "content-type": MIME[ext] ?? "application/octet-stream",
+        "cache-control": "public, max-age=86400",
+      });
+      res.end(req.method === "HEAD" ? undefined : body);
+    } catch {
+      res.writeHead(404, security);
+      res.end();
+    }
+  };
+}
 async function installSkill() {
   const srcFile = join(skillSrcDir, "SKILL.md");
   const dstFile = join(skillDstDir, "SKILL.md");
@@ -69,48 +130,7 @@ function apply(ctx) {
       ctx.webServer.register({
         kind: "prefix",
         path: RUNTIME_ROUTE,
-        async handler(req, res) {
-          if (req.method !== "GET" && req.method !== "HEAD") {
-            res.writeHead(405);
-            res.end();
-            return;
-          }
-          const url = new URL(req.url ?? "/", "http://dsh.invalid");
-          let rel;
-          try {
-            rel = decodeURIComponent(url.pathname.slice(RUNTIME_ROUTE.length));
-          } catch {
-            res.writeHead(400);
-            res.end();
-            return;
-          }
-          rel = rel.replace(/^\/+/, "");
-          if (!rel || rel.includes("..") || rel.includes("\0") || rel.includes("\\") || /[:*?"<>|]/.test(rel)) {
-            res.writeHead(404);
-            res.end();
-            return;
-          }
-          const root = normalize(runtimeDir);
-          const target = normalize(join(root, rel));
-          if (target !== root && !target.startsWith(root + sep)) {
-            res.writeHead(404);
-            res.end();
-            return;
-          }
-          try {
-            const body = await readFile(target);
-            const dot = target.lastIndexOf(".");
-            const ext = dot === -1 ? "" : target.slice(dot).toLowerCase();
-            res.writeHead(200, {
-              "content-type": MIME[ext] ?? "application/octet-stream",
-              "cache-control": "public, max-age=86400",
-            });
-            res.end(req.method === "HEAD" ? undefined : body);
-          } catch {
-            res.writeHead(404);
-            res.end();
-          }
-        },
+        handler: createRuntimeHandler(),
       }),
     "dsh-md-studio: vendored runtime route",
   );
@@ -130,4 +150,4 @@ function apply(ctx) {
   }, "dsh-md-studio: skill install");
 }
 
-export { apply, inject, name };
+export { apply, createRuntimeHandler, inject, name };
