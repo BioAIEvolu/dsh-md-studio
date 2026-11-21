@@ -36,7 +36,7 @@ function nextIdle() {
     else setTimeout(resolve, 0);
   });
 }
-export const diagnostics = { version: '1.3.12', active: false, documents: 0, diagrams: 0, repaired: 0, widgets: 0, math: 0, errors: 0 };
+export const diagnostics = { version: '1.3.13', active: false, documents: 0, diagrams: 0, repaired: 0, widgets: 0, math: 0, errors: 0 };
 
 function mathPlugin(md) {
   md.inline.ruler.before('escape', 'studio_math', (state, silent) => {
@@ -196,6 +196,154 @@ function prepareSvg(svg) {
     body.style.height = 'auto';
     body.style.maxHeight = 'none';
   }
+}
+// -----------------------------------------------------------------------
+// SVG 文字对比度兜底。
+// 模型手写的 SVG 里，<text> 经常不写 fill，或者只在 <g fill> 上写一次。旧实现用
+// CSS `text:not([fill])` 兜底，会在深色主题下把这类文字一律涂成主题白字，压在
+// #B5D4F4/#9FE1CB 这类浅色芯片上就是 1.3:1 的“白底白字”。这里改成语义兜底：
+// 插入 DOM 后按文字实际压着的形状底色算 WCAG 对比度，只纠正真的看不清的
+// （< 4.5:1，含 opacity 衰减），作者已选的可读配色一律保持原样。
+// -----------------------------------------------------------------------
+const MIN_TEXT_CONTRAST = 4.5;
+function cssColorOf(value) {
+  const m = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)/i.exec(value || '');
+  if (!m) return null;
+  const alpha = m[4] === undefined ? 1 : Number(m[4]);
+  if (!(alpha > 0.01)) return null;
+  return { r: +m[1], g: +m[2], b: +m[3], a: Math.min(1, alpha) };
+}
+const colorChannel = (value) => {
+  const v = value / 255;
+  return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+};
+function colorLuminance({ r, g, b }) { return 0.2126 * colorChannel(r) + 0.7152 * colorChannel(g) + 0.0722 * colorChannel(b); }
+function contrastOf(a, b) {
+  const [hi, lo] = [colorLuminance(a), colorLuminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+function blendOver(back, front, alpha) {
+  return { r: back.r + (front.r - back.r) * alpha, g: back.g + (front.g - back.g) * alpha, b: back.b + (front.b - back.b) * alpha };
+}
+function hslOf({ r, g, b }) {
+  const [rr, gg, bb] = [r / 255, g / 255, b / 255];
+  const max = Math.max(rr, gg, bb), min = Math.min(rr, gg, bb), l = (max + min) / 2;
+  if (max === min) return { h: 0, s: 0, l };
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === rr ? (gg - bb) / d + (gg < bb ? 6 : 0) : max === gg ? (bb - rr) / d + 2 : (rr - gg) / d + 4;
+  return { h: h / 6, s, l };
+}
+function rgbOfHsl({ h, s, l }) {
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+  const hue = (t) => {
+    if (t < 0) t += 1; if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return { r: Math.round(hue(h + 1 / 3) * 255), g: Math.round(hue(h) * 255), b: Math.round(hue(h - 1 / 3) * 255), a: 1 };
+}
+// 同色相的深色墨水：浅蓝芯片 → 深蓝字，观感上像作者本来就选了这个颜色。
+// 亮度从 0.26 逐步压暗，直到达到调色板基准（6:1），避免“看起来像调色板但只有 4.8:1”。
+function inkOn(fill) {
+  const { h, s } = hslOf(fill);
+  let candidate = null;
+  for (let l = 0.26; l >= 0.1; l -= 0.02) {
+    const attempt = rgbOfHsl({ h, s: Math.min(1, s * 0.9), l });
+    if (contrastOf(attempt, fill) >= 6) return attempt;
+    candidate = attempt;
+  }
+  return candidate;
+}
+function readableInk(background, preferred) {
+  const candidates = [];
+  if (preferred) candidates.push(preferred);
+  candidates.push(inkOn(background), { r: 255, g: 255, b: 255, a: 1 }, { r: 10, g: 14, b: 22, a: 1 });
+  // 先到先得：优先沿用主题色，其次同色相深墨，最后才是纯白/近黑——这样浅色芯片
+  // 不会被改成生硬的纯黑，深色画布也仍然是主题白字。
+  let best = null, bestRatio = 0;
+  for (const candidate of candidates) {
+    const ratio = contrastOf(candidate, background);
+    if (ratio >= MIN_TEXT_CONTRAST) return candidate;
+    if (ratio > bestRatio) { best = candidate; bestRatio = ratio; }
+  }
+  return best;
+}
+// 文字正下方绘制到的形状底色。用几何包含关系而不是 elementsFromPoint：
+// 聊天/文档里的图可能在视口外，elementFromPoint 会直接返回空，导致误判成画布底。
+function paintedFillUnder(text, box) {
+  const cx = (box.left + box.right) / 2, cy = (box.top + box.bottom) / 2;
+  const svg = text.ownerSVGElement || text.closest?.('svg');
+  if (!svg) return null;
+  const textArea = box.width * box.height;
+  let backdrop = null;
+  for (const el of svg.querySelectorAll('rect, circle, ellipse, path, polygon, polyline')) {
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) continue;
+    if (cx < rect.left || cx > rect.right || cy < rect.top || cy > rect.bottom) continue;
+    if (rect.width * rect.height < textArea * 0.5) continue; // 背景板必须明显大于文字
+    const fill = cssColorOf(getComputedStyle(el).fill);
+    if (!fill) continue;
+    backdrop = fill; // 文档顺序靠后 = 绘制在上层，取最后一个
+  }
+  return backdrop;
+}
+// 没有压在任何形状上：用容器实际绘制出来的底色（widget 卡片底）。
+function containerFillOf(text) {
+  let node = text.parentElement;
+  while (node && node !== document.documentElement) {
+    const color = cssColorOf(getComputedStyle(node).backgroundColor);
+    if (color) return color;
+    node = node.parentElement;
+  }
+  return null;
+}
+// 作者是否显式指定过颜色（属性或内联样式）——决定“默认黑字”要不要润色成同色相深墨。
+function explicitFillInChain(el) {
+  for (let node = el; node && node.tagName; node = node.parentElement) {
+    if (node.hasAttribute?.('fill')) return true;
+    const inline = node.getAttribute?.('style');
+    if (inline && /(?:^|;)\s*fill\s*:\s*[^;}]+/i.test(inline)) return true;
+  }
+  return false;
+}
+export function ensureSvgTextContrast(svg) {
+  if (!svg || !svg.isConnected) return 0;
+  const entries = [];
+  for (const text of svg.querySelectorAll('text')) {
+    const style = getComputedStyle(text);
+    if (style.display === 'none' || style.visibility === 'hidden') continue;
+    const box = text.getBoundingClientRect();
+    if (box.width < 1 || box.height < 1) continue;
+    entries.push({ text, style, box, fill: cssColorOf(style.fill) });
+  }
+  const fixes = [];
+  for (const { text, style, box, fill } of entries) {
+    if (!fill) continue; // fill:none 或 url(#gradient)：交给作者
+    const painted = paintedFillUnder(text, box);
+    const background = painted || containerFillOf(text);
+    if (!background) continue;
+    const opacity = Math.min(1, Math.max(0, Number(style.opacity) * Number(style.fillOpacity || 1)));
+    const shown = blendOver(background, fill, opacity);
+    const unstyled = !explicitFillInChain(text) && fill.r === 0 && fill.g === 0 && fill.b === 0;
+    if (!unstyled && contrastOf(shown, background) >= MIN_TEXT_CONTRAST) continue;
+    // 压着芯片时优先同色相深墨（像作者本来就选了这色）；纯画布上才沿用主题色。
+    const ink = readableInk(background, painted ? null : cssColorOf(style.color));
+    if (!ink) continue;
+    let alpha = opacity;
+    let finalRatio = contrastOf(blendOver(background, ink, alpha), background);
+    if (finalRatio < MIN_TEXT_CONTRAST && alpha < 1) { alpha = 1; finalRatio = contrastOf(ink, background); }
+    if (finalRatio < MIN_TEXT_CONTRAST && !unstyled) continue; // 作者配色实在无法达标时不硬改
+    fixes.push({ text, ink, dropOpacity: alpha !== opacity });
+  }
+  // 先算后写：避免每写一个 text 都触发一次重排。
+  for (const { text, ink, dropOpacity } of fixes) {
+    text.style.setProperty('fill', `rgb(${ink.r}, ${ink.g}, ${ink.b})`);
+    if (dropOpacity) { text.style.setProperty('opacity', '1'); text.style.setProperty('fill-opacity', '1'); }
+  }
+  return fixes.length;
 }
 function setSvgFit(svg, control, fit) {
   const width = svgCanvasWidth(svg);
@@ -471,8 +619,8 @@ export function mountMarkdown(root, text, { documentPath, dark = false, openFile
     if (!/<svg[\s>]/i.test(clean)) return;
     const body = document.createElement('div'); body.className = 'mds-widget-body'; body.innerHTML = clean;
     const svg = body.querySelector('svg');
-    if (svg) prepareSvg(svg);
     pre.replaceWith(body);
+    if (svg) { prepareSvg(svg); ensureSvgTextContrast(svg); }
     if (svg && bar) addWidgetControls(bar, svg, signal);
     if (title) diagnostics.widgets++;
   });
@@ -584,8 +732,8 @@ function widgetCardFromCode(code, dark) {
   const bar = document.createElement('div'); bar.className = 'mds-widget-title'; bar.textContent = title || '图表';
   const body = document.createElement('div'); body.className = 'mds-widget-body'; body.innerHTML = clean;
   const svg = body.querySelector('svg');
-  if (svg) prepareSvg(svg);
   pre.before(card); pre.hidden = true; card.append(bar, body, pre);
+  if (svg) { prepareSvg(svg); ensureSvgTextContrast(svg); }
   const entry = chatEntries.get(code);
   if (svg && entry) {
     entry.widgetController = new AbortController();

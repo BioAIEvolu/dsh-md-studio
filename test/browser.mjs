@@ -324,30 +324,60 @@ await page.evaluate(text => window.__render(text), [
   '```',
   '<svg viewBox="0 0 200 60" width="100%"><title>裸围栏</title><rect x="10" y="10" rx="8" width="180" height="40" fill="#10B981"/><text x="100" y="36" text-anchor="middle" fill="#fff" font-size="13">无语言</text><text x="100" y="54" text-anchor="middle" font-size="12">无填充兜底</text></svg>',
   '```',
+  '',
+  '```',
+  '<svg viewBox="0 0 460 170" width="100%" font-family="system-ui,sans-serif">',
+  '  <title>对比度</title>',
+  '  <rect x="10" y="10" width="200" height="44" rx="6" fill="#B5D4F4"/>',
+  '  <g fill="#0C447C"><text x="110" y="38" text-anchor="middle" font-size="13">组继承深色</text></g>',
+  '  <rect x="10" y="64" width="200" height="44" rx="6" fill="#9FE1CB"/>',
+  '  <text x="110" y="92" text-anchor="middle" font-size="13">无填充芯片字</text>',
+  '  <rect x="230" y="10" width="200" height="44" rx="6" fill="#B5D4F4"/>',
+  '  <text x="330" y="38" text-anchor="middle" font-size="13" fill="#ffffff">白字压浅底</text>',
+  '  <rect x="230" y="64" width="200" height="44" rx="6" fill="#1F6FEB"/>',
+  '  <text x="330" y="92" text-anchor="middle" font-size="13" fill="#ffffff">白字压深底</text>',
+  '  <text x="14" y="140" font-size="12">画布文字无填充</text>',
+  '</svg>',
+  '```',
 ].join('\n'));
 await page.waitForSelector('[data-mds-root] .mds-widget .mds-widget-body svg', { timeout: 60000 });
-assert.equal(await page.locator('[data-mds-root] .mds-widget').count(), 2, 'explicit and bare-svg fences both hydrate into widget cards');
+assert.equal(await page.locator('[data-mds-root] .mds-widget').count(), 3, 'explicit, bare-svg and contrast fences all hydrate into widget cards');
 assert.ok(await page.locator('[data-mds-root] .mds-widget-title:has-text("分层架构")').count(), 'explicit fence keeps its title');
 assert.ok(await page.locator('[data-mds-root] .mds-widget-title:has-text("裸围栏")').count(), 'bare fence takes title from svg <title>');
 assert.equal(await page.locator('[data-mds-root] .mds-widget script, [data-mds-root] .mds-widget foreignObject').count(), 0, 'document widgets stay sanitized');
-// Dark-mode fallback: a <text> without fill follows var(--dsw-alias-label-primary).
-// (The page is in dark state here — the theme-flip section set the token on body.)
-const noFill = page.locator('[data-mds-root] .mds-widget-body text', { hasText: '无填充兜底' });
-assert.equal(await noFill.count(), 1, 'no-fill text present');
-const tokenFill = await page.evaluate(() => getComputedStyle(document.body).getPropertyValue('--dsw-alias-label-primary').trim());
-const currentFill = await noFill.evaluate(t => getComputedStyle(t).fill);
-assert.ok(tokenFill && currentFill.includes(tokenFill.replace('#', '') === '' ? tokenFill : tokenFill) || /rgb\(230,\s*237,\s*243\)/.test(currentFill), 'fill follows body theme token, got ' + currentFill + ' vs token ' + tokenFill);
-await page.evaluate(() => { document.body.style.removeProperty('--dsw-alias-label-primary'); });
-const lightFill = await noFill.evaluate(t => getComputedStyle(t).fill);
-assert.ok(/rgb\(31,\s*41,\s*55\)/.test(lightFill), 'falls back to #1F2937 without token, got ' + lightFill);
-const nearestWins = await noFill.evaluate(t => {
-  const card = t.closest('.mds-widget');
-  card.style.setProperty('--dsw-alias-label-primary', 'rgb(229, 231, 235)');
-  const fill = getComputedStyle(t).fill;
-  card.style.removeProperty('--dsw-alias-label-primary');
-  return fill;
+// v1.3.13: SVG text contrast guard. The old CSS fallback painted every <text>
+// without a fill attribute in the theme text colour — overriding <g fill>
+// inheritance and turning chip labels into white-on-white (1.3:1). Text colour
+// is now chosen against the shape it actually sits on, and only when the
+// authored colour is unreadable (< 4.5:1, opacity included).
+const chipContrast = await page.evaluate(() => {
+  const parse = (c) => { const m = /rgba?\(([^)]+)\)/.exec(c || ''); if (!m) return null; const [r, g, b] = m[1].split(/[,\s]+/).map(Number); return { r, g, b }; };
+  const lum = ({ r, g, b }) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  const out = [];
+  for (const text of document.querySelectorAll('[data-mds-root] .mds-widget-body text')) {
+    const label = text.textContent.trim();
+    if (!['组继承深色', '无填充芯片字', '白字压浅底', '白字压深底', '画布文字无填充'].includes(label)) continue;
+    const fill = parse(getComputedStyle(text).fill);
+    const rect = [...document.querySelectorAll('[data-mds-root] .mds-widget-body rect')]
+      .find((r) => { const b = r.getBoundingClientRect(), t = text.getBoundingClientRect(); return t.left >= b.left - 2 && t.right <= b.right + 2 && t.top >= b.top - 2 && t.bottom <= b.bottom + 2; });
+    const bg = rect ? parse(getComputedStyle(rect).fill) : parse(getComputedStyle(text.closest('.mds-widget')).backgroundColor);
+    const alpha = Number(getComputedStyle(text).opacity) * Number(getComputedStyle(text).fillOpacity || 1);
+    const shown = fill && bg ? { r: bg.r + (fill.r - bg.r) * alpha, g: bg.g + (fill.g - bg.g) * alpha, b: bg.b + (fill.b - bg.b) * alpha } : null;
+    out.push({ label, fill: getComputedStyle(text).fill, contrast: shown ? Math.round(ratio(shown, bg) * 100) / 100 : null });
+  }
+  return out;
 });
-assert.ok(/rgb\(229,\s*231,\s*235\)/.test(nearestWins), 'nearest token wins, got ' + nearestWins);
+const byLabel = Object.fromEntries(chipContrast.map((c) => [c.label, c]));
+assert.equal(Object.keys(byLabel).length, 5, 'all contrast fixtures render, got ' + JSON.stringify(chipContrast));
+for (const label of ['组继承深色', '无填充芯片字', '白字压浅底', '白字压深底', '画布文字无填充']) {
+  assert.ok(byLabel[label].contrast >= 4.5, 'text ' + label + ' must reach 4.5:1, got ' + byLabel[label].contrast + ' (' + byLabel[label].fill + ')');
+}
+assert.ok(/rgb\(12,\s*68,\s*124\)/.test(byLabel['组继承深色'].fill), '<g fill> inheritance must be preserved, got ' + byLabel['组继承深色'].fill);
+assert.ok(!/rgb\(255,\s*255,\s*255\)/.test(byLabel['白字压浅底'].fill), 'white-on-light-chip must be corrected, got ' + byLabel['白字压浅底'].fill);
+assert.ok(/rgb\(255,\s*255,\s*255\)/.test(byLabel['白字压深底'].fill), 'readable white-on-dark-chip must be kept, got ' + byLabel['白字压深底'].fill);
+const contrastFixes = await page.evaluate(() => document.querySelectorAll('[data-mds-root] .mds-widget-body text[style*="fill"]').length);
+assert.ok(contrastFixes >= 3, 'unreadable text should get an inline fill, got ' + contrastFixes);
 // Unmount the chat simulator: cards must be garbage collected.
 const chatCardsBefore = await page.locator('.mds-diagram').count();
 await page.evaluate(() => window.__chat.remove());

@@ -2,6 +2,17 @@
 
 本项目所有显著变更都记录在此文件中。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循语义化版本。
 
+## [1.3.13] - 2026-11-21
+
+### 修复
+
+- **SVG 文字对比度兜底**：删除 `.mds-widget-body text:not([fill])` 这条 CSS 规则——它会把没有 `fill` 属性的 `<text>` 一律涂成主题色（深色主题下是白字），既覆盖 `<g fill>` 的继承，又让压在 `#B5D4F4`/`#9FE1CB` 浅色芯片上的文字变成 **1.3:1 的白底白字**。改为 `ensureSvgTextContrast()`：插入 DOM 后按文字正下方实际绘制的色块算 WCAG 对比度，只在低于 4.5:1（含 opacity 衰减）时纠正，并优先选同色相深墨；作者已选的可读配色（含 `<g fill>` 继承、内联 style、白字压深底）保持原样。
+- 文字对比度按几何包含关系判定背景，不依赖 `elementsFromPoint`，因此视口外（文档预览下半部分、长对话）同样生效。
+
+### 工具
+
+- 随包 `mds-diagram-design` 技能升级到 1.1：色板标注实测对比度（6.31–6.60:1），新增「每个 `<text>` 必须自带 `fill`」「浅色芯片禁止白字/浅字」「文字不透明度 ≥0.85」硬规则与反例，并附带零依赖检查脚本 `skills/mds-diagram-design/scripts/check-svg-contrast.mjs`（`--self-test` 接入 CI）。
+
 ## [1.3.12] - 2026-11-21
 
 ### 修复

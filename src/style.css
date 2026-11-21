@@ -28,7 +28,9 @@
 .mds-widget{border:1px solid var(--dsw-alias-border-l1,#d0d7de);border-radius:10px;margin:16px 0;overflow:hidden;background:var(--dsw-alias-bg-base,#fff);height:auto;min-height:min-content;}
 .mds-widget-title{padding:8px 14px;border-bottom:1px solid var(--dsw-alias-border-l1,#d0d7de);font:500 13px system-ui,sans-serif;color:var(--dsw-alias-label-secondary,#57606a);}
 .mds-widget-body{padding:16px;overflow:visible;min-height:min-content;height:auto;max-height:none;}.mds-widget-body svg{display:block;margin:0 auto;width:auto;height:auto;max-width:none;max-height:none;vertical-align:top;}
-.mds-widget-body text:not([fill]){fill:var(--dsw-alias-label-primary,#1F2937)}
+/* 文字颜色不再按“有没有 fill 属性”粗暴兜底：那条规则会覆盖 <g fill> 的继承链，
+   在没有 fill 的 <text> 上强塞主题白字，压在浅色芯片上就是白底白字。
+   现在由 renderer 的 ensureSvgTextContrast() 按文字背后真实底色算对比度后再纠正。 */
 .mds-math{border:1px solid var(--dsw-alias-border-l1,#d0d7de);border-radius:10px;margin:16px 0;overflow:hidden;background:var(--dsw-alias-bg-base,#fff);height:auto;min-height:min-content;}
 .mds-math-pane{padding:16px;overflow-x:auto;overflow-y:hidden;text-align:center;}
 .mds-math-pane .katex{display:inline-block;}
