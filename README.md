@@ -16,7 +16,7 @@ DSH 最完整的 Markdown 渲染插件。接管右侧文件预览 + 对话消息
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 [![GitHub release](https://img.shields.io/github/v/release/BioAIEvolu/dsh-md-studio)](https://github.com/BioAIEvolu/dsh-md-studio/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.2.0--rc.2-blue)](https://github.com/deepseek-ai/deepseek-harness)
+[![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.2.2--rc.5-blue)](https://github.com/deepseek-ai/deepseek-harness)
 [![English](https://img.shields.io/badge/docs-English-green)](README.en.md)
 
 如果这个项目帮到了你，请考虑 ⭐ **Star** 支持一下，让更多人发现它！

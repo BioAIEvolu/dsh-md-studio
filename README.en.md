@@ -14,7 +14,7 @@ The rendering engine ships with the plugin — **fully offline** · no document 
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 [![GitHub release](https://img.shields.io/github/v/release/BioAIEvolu/dsh-md-studio)](https://github.com/BioAIEvolu/dsh-md-studio/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.2.0--rc.2-blue)](https://github.com/deepseek-ai/deepseek-harness)
+[![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.2.2--rc.5-blue)](https://github.com/deepseek-ai/deepseek-harness)
 [![中文文档](https://img.shields.io/badge/docs-中文-green)](README.md)
 
 If this project helps you, please consider giving it a ⭐ **Star** to help others discover it!

@@ -49,7 +49,7 @@ const index = {
       },
       versions: [
         {
-          version: "1.3.11",
+          version: "1.3.12",
           publishTimestamp: Math.floor(Date.now() / 1000),
           source: {
             type: "npm",
