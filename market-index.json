@@ -29,8 +29,8 @@
         "zh": "Markdown Studio"
       },
       "description": {
-        "en": "Complete Markdown renderer for file preview and chat: Mermaid diagrams, SVG architecture (mds-diagram), KaTeX math formulas, GFM tables. Offline.",
-        "zh": "文档预览+对话消息双场景完整 Markdown 渲染：Mermaid 图表、SVG 架构图、KaTeX 公式、GFM 表格。离线可用。"
+        "en": "Complete Markdown renderer for file preview and chat: Mermaid diagrams, SVG architecture (mds-diagram), KaTeX math formulas, GFM tables. Offline. Requires DSH 0.2.2-rc.5+.",
+        "zh": "文档预览+对话消息双场景完整 Markdown 渲染：Mermaid 图表、SVG 架构图、KaTeX 公式、GFM 表格。离线可用。需 DSH 0.2.2-rc.5+。"
       },
       "icon": "https://raw.githubusercontent.com/BioAIEvolu/dsh-md-studio/main/docs/images/icon.svg",
       "homepage": "https://github.com/BioAIEvolu/dsh-md-studio#readme",

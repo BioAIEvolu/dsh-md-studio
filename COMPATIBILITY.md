@@ -1,7 +1,7 @@
-# dsh-md-studio v1.3.11 — DSH 0.2.2-rc.5 Compatibility Verification
+# dsh-md-studio v1.3.14 — DSH 0.2.2-rc.5 Compatibility Verification
 
-**Date**: 2026-11-20  
-**Plugin Version**: 1.3.11  
+**Date**: 2026-11-21  
+**Plugin Version**: 1.3.14  
 **DSH Kernel**: 0.2.2-rc.5（实测安装版本，`dsh --version`）  
 **Declared Support**: `>=0.2.2-rc.5 <0.3.0-0`
 
@@ -56,6 +56,11 @@ All test scenarios passed:
 - ✅ Doc mds-diagram widget
 - ✅ Doc bare-svg widget
 
+### v1.3.13+ Additions (re-verified on DSH 0.2.2-rc.5, 2026-11-21)
+- ✅ SVG text contrast guard: 5 fixtures (group inheritance / no fill / white-on-pastel / white-on-dark kept / canvas text) all ≥4.5:1
+- ✅ Runtime route security: same-origin 200, cross-site 403, path traversal 404, non-GET/HEAD 405, HEAD without body
+- ✅ Diagram contrast checker `check-svg-contrast.mjs` self-test (bad fixtures rejected, palette fixtures accepted)
+
 ## Real GUI Validation (session-3822c978)
 
 **Test Date**: 2026-11-19  
@@ -102,7 +107,7 @@ All test scenarios passed:
 
 ## Conclusion
 
-✅ **dsh-md-studio v1.3.11 is fully compatible with DSH 0.2.2-rc.5**
+✅ **dsh-md-studio v1.3.14 is fully compatible with DSH 0.2.2-rc.5**
 
 All features work as expected:
 - File preview rendering
@@ -116,11 +121,11 @@ No code changes required for rc.5 support.
 
 ## Upgrade Path
 
-Users on DSH 0.2.2-rc.5 can safely install or upgrade to dsh-md-studio v1.3.11:
+Users on DSH 0.2.2-rc.5 can safely install or upgrade to dsh-md-studio v1.3.14:
 
 ```bash
 # Install
-npm install -g dsh-md-studio@1.3.11
+npm install -g dsh-md-studio@1.3.14
 
 # Or via DSH plugin manager
 dsh plugin add dsh-md-studio
@@ -130,14 +135,14 @@ After installation, **restart DSH completely** (not just refresh) to activate th
 
 ## Version Support Matrix
 
-| DSH Version | dsh-md-studio 1.3.11 | Notes |
+| DSH Version | dsh-md-studio 1.3.14 | Notes |
 |-------------|----------------------|-------|
 | 0.2.0-rc.2  | ❌ Not advertised | Never verified — previous lower bound claimed unverified support |
 | 0.2.0-rc.3  | ❌ Not advertised | Never verified |
 | 0.2.1       | ❌ Not advertised | Never verified |
 | 0.2.2-rc.3  | ❌ Not advertised | Development reference only, not a verified baseline |
 | 0.2.2-rc.4  | ❌ Not advertised | Never verified |
-| 0.2.2-rc.5  | ✅ Verified | Declared minimum, tested 2026-11-19 |
+| 0.2.2-rc.5  | ✅ Verified | Declared minimum, re-tested 2026-11-21 on v1.3.14 |
 | 0.3.0+      | ❌ Not supported | Breaking changes expected |
 
 ---
