@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Markdown Studio">
+  <title>Markdown Studio</title>
+  <rect width="128" height="128" rx="28" fill="#B5D4F4"/>
+  <!-- M -->
+  <polyline points="24,90 24,42 48,76 72,42 72,90" fill="none" stroke="#0C447C" stroke-width="9" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- down arrow -->
+  <line x1="98" y1="40" x2="98" y2="80" stroke="#0C447C" stroke-width="9" stroke-linecap="round"/>
+  <polygon points="84,72 112,72 98,94" fill="#0C447C"/>
+</svg>
