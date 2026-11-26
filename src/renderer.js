@@ -36,7 +36,7 @@ function nextIdle() {
     else setTimeout(resolve, 0);
   });
 }
-export const diagnostics = { version: '1.3.14', active: false, documents: 0, diagrams: 0, repaired: 0, widgets: 0, math: 0, errors: 0 };
+export const diagnostics = { version: '1.3.15', active: false, documents: 0, diagrams: 0, repaired: 0, widgets: 0, math: 0, errors: 0 };
 
 function mathPlugin(md) {
   md.inline.ruler.before('escape', 'studio_math', (state, silent) => {
@@ -870,8 +870,12 @@ export function watchMermaid(target, { getDark = () => false } = {}) {
     }
     for (const code of seen) {
       if (!code.isConnected) continue;
-      if (isInsideExcluded(code)) continue; // already rendered (by us or dsh-mermaid)
       const entry = chatEntries.get(code);
+      // Foreign widgets (document preview / dsh-mermaid) stay excluded. Our own
+      // wrapped blocks must NOT be skipped: during streaming the card was built
+      // from a partial window and the pre now lives INSIDE the card, so this
+      // entry path is the only thing that can rebuild it once the full text lands.
+      if (!entry && isInsideExcluded(code)) continue;
       if (entry && entry.wrapper) {
         if ((code.textContent || '').trim() === entry.text) continue;
         disposeChat(code); // stream rewrote the diagram: rebuild from scratch
